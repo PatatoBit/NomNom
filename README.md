@@ -1,6 +1,6 @@
 # MooYoung (mooyoung)
 
-MooYoung is a TypeScript [Cloudflare Worker](https://developers.cloudflare.com/workers/) that receives Instagram Direct Message webhooks from Meta's Instagram API (Unified Login, `messages` field). It reads shared reels and text from an allowlisted pair of Instagram users: `patato.jpeg` and `youthkid9048`.
+MooYoung is a TypeScript [Cloudflare Worker](https://developers.cloudflare.com/workers/) that receives Instagram Direct Message webhooks from Meta's Instagram API (Unified Login, `messages` field), extracts restaurants and dishes with Workers AI into [D1](https://developers.cloudflare.com/d1/), and serves the **Miyu & Pat Nom Nom List** web app at `GET /` (https://mooyoung.chayapat.me/). Allowed senders: `patato.jpeg` and `youthkid9048`.
 
 ## Features
 
@@ -11,12 +11,17 @@ MooYoung is a TypeScript [Cloudflare Worker](https://developers.cloudflare.com/w
 - Parsing for `ig_reel` attachments, other shares, and reel URLs in message text
 - Structured JSON logs for `wrangler tail`
 - Optional forwarding of normalized events to a downstream URL
+- D1-backed Places, Foods, and DM Inbox with REST API under `/api/*`
+- Workers AI extraction pipeline with safe JSON parsing and heuristics fallback
 
 ## Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/` | Health check: `{ "ok": true, "service": "mooyoung" }` |
+| `GET` | `/` | Nom Nom List web app (HTML) |
+| `GET` | `/api/health` | Health check: `{ "ok": true, "service": "mooyoung" }` |
+| `GET/POST/PATCH/DELETE` | `/api/places`, `/api/foods` | CRUD for saved lists |
+| `GET/PATCH` | `/api/inbox` | Instagram DM inbox and review actions |
 | `GET` | `/webhook` | Meta subscription verification |
 | `POST` | `/webhook` | Instagram messaging webhooks |
 
@@ -64,6 +69,12 @@ npx wrangler tail
 ```
 
 ## Deploy
+
+Apply D1 migrations before or after the first deploy:
+
+```bash
+npx wrangler d1 migrations apply mooyoung-db --remote
+```
 
 ```bash
 npm run deploy

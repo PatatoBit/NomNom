@@ -1,4 +1,6 @@
 export interface Env {
+  DB: D1Database;
+  AI: Ai;
   WEBHOOK_VERIFY_TOKEN: string;
   INSTAGRAM_APP_SECRET: string;
   INSTAGRAM_ACCESS_TOKEN: string;
@@ -8,6 +10,29 @@ export interface Env {
   FORWARD_WEBHOOK_URL?: string;
   FORWARD_WEBHOOK_SECRET?: string;
   FORWARD_WEBHOOK_HEADER?: string;
+}
+
+const USERNAME_TO_ADDED_BY: Record<string, "Pat" | "Miyu"> = {
+  "patato.jpeg": "Pat",
+  "youthkid9048": "Miyu",
+};
+
+export function usernameToAddedBy(username: string): "Pat" | "Miyu" | null {
+  const key = username.trim().replace(/^@+/, "").toLowerCase();
+  return USERNAME_TO_ADDED_BY[key] ?? null;
+}
+
+export function bangkokDateYmd(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  const d = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${y}-${m}-${d}`;
 }
 
 export const DEFAULT_ALLOWED_USERNAMES = "patato.jpeg,youthkid9048";
