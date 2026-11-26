@@ -719,7 +719,7 @@ function renderMap(places) {
     L.control.zoom({ position: 'topright' }).addTo(state.map);
     if (CARTO_API_KEY) {
       L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?api_key=' + encodeURIComponent(CARTO_API_KEY),
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_API_KEY),
         { attribution: '&copy; OSM &copy; CARTO', maxZoom: 19 }
       ).addTo(state.map);
     } else {
@@ -744,11 +744,29 @@ function renderMap(places) {
   }
 }
 
+function isInstagramSource(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return /(^|\\.)instagram\\.com$/i.test(u.hostname) && /\\/(reel|reels|p|tv)\\//i.test(u.pathname);
+  } catch (e) {
+    return false;
+  }
+}
+
+function rowPreview(item, label) {
+  if (item.image_url) {
+    return '<span class="thumb"><img src="' + esc(item.image_url) + '" alt="" loading="lazy" /></span>';
+  }
+  if (isInstagramSource(item.source_url)) {
+    return '<span class="thumb"><img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" /></span>';
+  }
+  return '<span class="thumb">' + esc(initials(label || item.name)) + '</span>';
+}
+
 function placeRow(p) {
   const done = p.status === 'visited';
-  const thumb = p.image_url
-    ? '<span class="thumb"><img src="' + esc(p.image_url) + '" alt="" /></span>'
-    : '<span class="thumb">' + esc(initials(p.name)) + '</span>';
+  const thumb = rowPreview(p, p.name);
   const meta = [p.area, p.city, p.cuisine, p.price_level].filter(Boolean).join(' · ');
   const chip = done && p.visit_date ? '<span class="chip done">' + esc(p.visit_date) + '</span>' : '';
   const city = (!isBangkok(p.lat, p.lng) && p.city) ? ' <span class="city-badge">' + esc(p.city) + '</span>' : '';
@@ -803,9 +821,7 @@ function filteredFoods() {
 
 function foodRow(f) {
   const done = f.status === 'tried';
-  const thumb = f.image_url
-    ? '<span class="thumb"><img src="' + esc(f.image_url) + '" alt="" /></span>'
-    : '<span class="thumb">' + esc(initials(f.name)) + '</span>';
+  const thumb = rowPreview(f, f.name);
   const meta = [f.category, f.cuisine, f.restaurant_name ? 'At ' + f.restaurant_name : ''].filter(Boolean).join(' · ');
   return '<li class="row">' +
     thumb +
