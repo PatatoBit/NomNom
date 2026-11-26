@@ -116,12 +116,16 @@ describe("sender lookup and allowlist", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await processWebhookPayload(baseEnv, payload);
     expect(mockFetch).toHaveBeenCalledOnce();
-    const nomnomLogs = logSpy.mock.calls.filter(
+    const lookupUrl = String(mockFetch.mock.calls[0][0]);
+    expect(lookupUrl).toBe(
+      "https://graph.facebook.com/v27.0/sender-1?fields=username",
+    );
+    const mooyoungLogs = logSpy.mock.calls.filter(
       (c) =>
         typeof c[0] === "string" &&
-        c[0].includes('"type":"nomnom_event"'),
+        c[0].includes('"type":"mooyoung_event"'),
     );
-    expect(nomnomLogs).toHaveLength(0);
+    expect(mooyoungLogs).toHaveLength(0);
     logSpy.mockRestore();
   });
 
@@ -148,13 +152,17 @@ describe("sender lookup and allowlist", () => {
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await processWebhookPayload(baseEnv, payload);
-    const nomnomLogs = logSpy.mock.calls.filter(
+    const lookupUrl = String(mockFetch.mock.calls[0][0]);
+    expect(lookupUrl).toBe(
+      "https://graph.facebook.com/v27.0/sender-2?fields=username",
+    );
+    const mooyoungLogs = logSpy.mock.calls.filter(
       (c) =>
         typeof c[0] === "string" &&
-        c[0].includes('"type":"nomnom_event"'),
+        c[0].includes('"type":"mooyoung_event"'),
     );
-    expect(nomnomLogs).toHaveLength(1);
-    const parsed = JSON.parse(nomnomLogs[0][0] as string);
+    expect(mooyoungLogs).toHaveLength(1);
+    const parsed = JSON.parse(mooyoungLogs[0][0] as string);
     expect(parsed.sender_username).toBe("Patato.JPEG");
     logSpy.mockRestore();
   });
@@ -205,7 +213,7 @@ describe("forwarding", () => {
 
     const env: Env = {
       ...baseEnv,
-      FORWARD_WEBHOOK_URL: "https://example.com/hooks/nomnom",
+      FORWARD_WEBHOOK_URL: "https://example.com/hooks/mooyoung",
       FORWARD_WEBHOOK_SECRET: "forward-secret",
     };
 
@@ -226,7 +234,7 @@ describe("forwarding", () => {
     await processWebhookPayload(env, payload);
 
     const forwardCall = mockFetch.mock.calls.find((c) =>
-      String(c[0]).includes("hooks/nomnom"),
+      String(c[0]).includes("hooks/mooyoung"),
     );
     expect(forwardCall).toBeDefined();
     const init = forwardCall![1] as RequestInit;
@@ -245,9 +253,9 @@ describe("forwarding", () => {
 
     const env: Env = {
       ...baseEnv,
-      FORWARD_WEBHOOK_URL: "https://example.com/hooks/nomnom",
+      FORWARD_WEBHOOK_URL: "https://example.com/hooks/mooyoung",
       FORWARD_WEBHOOK_SECRET: "s",
-      FORWARD_WEBHOOK_HEADER: "X-NomNom-Secret",
+      FORWARD_WEBHOOK_HEADER: "X-MooYoung-Secret",
     };
 
     const payload = {
@@ -267,11 +275,11 @@ describe("forwarding", () => {
     await processWebhookPayload(env, payload);
 
     const forwardCall = mockFetch.mock.calls.find((c) =>
-      String(c[0]).includes("hooks/nomnom"),
+      String(c[0]).includes("hooks/mooyoung"),
     );
     const init = forwardCall![1] as RequestInit;
     const headers = init.headers as Record<string, string>;
-    expect(headers["X-NomNom-Secret"]).toBe("s");
+    expect(headers["X-MooYoung-Secret"]).toBe("s");
     expect(headers.Authorization).toBeUndefined();
   });
 });

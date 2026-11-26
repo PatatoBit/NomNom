@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 
 const TEST_VERIFY_TOKEN = "test_verify_token";
 
-describe("NomNom worker", () => {
+describe("MooYoung worker", () => {
   it("GET / returns health JSON", async () => {
     const response = await SELF.fetch("https://example.com/");
     expect(response.status).toBe(200);
     const json = (await response.json()) as { ok: boolean; service: string };
-    expect(json).toEqual({ ok: true, service: "nomnom-ig-bot" });
+    expect(json).toEqual({ ok: true, service: "mooyoung" });
   });
 
   it("GET /webhook returns 403 without valid token in dev", async () => {

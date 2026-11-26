@@ -1,8 +1,16 @@
+export const DEFAULT_INSTAGRAM_GRAPH_BASE_URL =
+  "https://graph.facebook.com/v27.0";
+
 export async function lookupInstagramUsername(
   senderId: string,
   accessToken: string,
+  graphBaseUrl?: string,
 ): Promise<string | null> {
-  const url = `https://graph.instagram.com/v22.0/${encodeURIComponent(senderId)}?fields=username`;
+  const base = (graphBaseUrl ?? DEFAULT_INSTAGRAM_GRAPH_BASE_URL).replace(
+    /\/$/,
+    "",
+  );
+  const url = `${base}/${encodeURIComponent(senderId)}?fields=username`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,

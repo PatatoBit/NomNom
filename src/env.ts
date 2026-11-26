@@ -2,6 +2,8 @@ export interface Env {
   WEBHOOK_VERIFY_TOKEN: string;
   INSTAGRAM_APP_SECRET: string;
   INSTAGRAM_ACCESS_TOKEN: string;
+  /** Optional override for username lookup (default: graph.facebook.com/v27.0). */
+  INSTAGRAM_GRAPH_BASE_URL?: string;
   ALLOWED_USERNAMES?: string;
   FORWARD_WEBHOOK_URL?: string;
   FORWARD_WEBHOOK_SECRET?: string;

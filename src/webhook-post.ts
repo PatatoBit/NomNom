@@ -57,6 +57,7 @@ export async function processWebhookPayload(
       const lookedUp = await lookupInstagramUsername(
         event.sender.id,
         env.INSTAGRAM_ACCESS_TOKEN,
+        env.INSTAGRAM_GRAPH_BASE_URL,
       );
       if (!lookedUp) {
         continue;
@@ -70,7 +71,7 @@ export async function processWebhookPayload(
     }
 
     const normalized = buildNormalizedEvent(event, username);
-    console.log(JSON.stringify({ type: "nomnom_event", ...normalized }));
+    console.log(JSON.stringify({ type: "mooyoung_event", ...normalized }));
     await forwardEvent(env, normalized);
   }
 }
