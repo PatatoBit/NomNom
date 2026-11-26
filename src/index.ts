@@ -14,7 +14,7 @@ export default {
     const path = url.pathname;
 
     if (path === "/" && request.method === "GET") {
-      return serveAppHtml();
+      return serveAppHtml(env);
     }
 
     if (path.startsWith("/api/")) {

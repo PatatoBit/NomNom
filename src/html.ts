@@ -1,4 +1,7 @@
-export function serveAppHtml(): Response {
+import type { Env } from "./env";
+
+export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
+  const cartoApiKeyJson = JSON.stringify(env.CARTO_API_KEY?.trim() ?? "");
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -241,6 +244,7 @@ export function serveAppHtml(): Response {
   <dialog id="edit-dialog"></dialog>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
+const CARTO_API_KEY = ${cartoApiKeyJson};
 ${APP_SCRIPT}
   </script>
 </body>
@@ -333,7 +337,10 @@ function renderMap(places) {
   }
   if (!state.map) {
     state.map = L.map('map', { scrollWheelZoom: false }).setView([13.7563, 100.5018], 11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    const tileUrl = CARTO_API_KEY
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=' + encodeURIComponent(CARTO_API_KEY)
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileUrl, {
       attribution: '&copy; OSM &copy; CARTO',
       maxZoom: 19
     }).addTo(state.map);

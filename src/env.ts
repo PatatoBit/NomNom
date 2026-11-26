@@ -10,6 +10,8 @@ export interface Env {
   FORWARD_WEBHOOK_URL?: string;
   FORWARD_WEBHOOK_SECRET?: string;
   FORWARD_WEBHOOK_HEADER?: string;
+  /** CARTO basemap API key for Leaflet tiles on the Nom Nom map. */
+  CARTO_API_KEY?: string;
 }
 
 const USERNAME_TO_ADDED_BY: Record<string, "Pat" | "Miyu"> = {

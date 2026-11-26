@@ -17,6 +17,7 @@ export default defineWorkersConfig({
             WEBHOOK_VERIFY_TOKEN: "test_verify_token",
             INSTAGRAM_APP_SECRET: "test_app_secret",
             INSTAGRAM_ACCESS_TOKEN: "test_ig_access_token",
+            CARTO_API_KEY: "test_carto_api_key",
             MIGRATIONS_JSON: migrationsJson,
           },
           d1Databases: ["DB"],
