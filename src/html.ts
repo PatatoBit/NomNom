@@ -360,10 +360,28 @@ function renderMap(places) {
   }
 }
 
+function isInstagramSource(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return /(^|\\.)instagram\\.com$/i.test(u.hostname) && /\\/(reel|reels|p|tv)\\//i.test(u.pathname);
+  } catch (e) {
+    return false;
+  }
+}
+
+function cardPreview(item, cuisine) {
+  if (item.image_url) {
+    return '<img src="' + esc(item.image_url) + '" alt="" loading="lazy" />';
+  }
+  if (isInstagramSource(item.source_url)) {
+    return '<img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" />';
+  }
+  return '<span>' + placeholderEmoji(cuisine) + '</span>';
+}
+
 function placeCard(p) {
-  const img = p.image_url
-    ? '<img src="' + esc(p.image_url) + '" alt="" />'
-    : '<span>' + placeholderEmoji(p.cuisine) + '</span>';
+  const img = cardPreview(p, p.cuisine);
   const statusLabel = p.status === 'visited' ? 'Visited' + (p.visit_date ? ' ' + esc(p.visit_date) : '') : 'Want to go';
   return '<article class="card" data-id="' + p.id + '">' +
     '<div class="card-img">' + img + '</div>' +
@@ -418,7 +436,7 @@ function filteredFoods() {
 }
 
 function foodCard(f) {
-  const img = f.image_url ? '<img src="' + esc(f.image_url) + '" alt="" />' : '<span>' + placeholderEmoji(f.cuisine) + '</span>';
+  const img = cardPreview(f, f.cuisine);
   const statusLabel = f.status === 'tried' ? 'Tried' : 'Want to try';
   return '<article class="card">' +
     '<div class="card-img">' + img + '</div>' +

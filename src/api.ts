@@ -17,6 +17,7 @@ import {
 } from "./db";
 import type { Env } from "./env";
 import { bangkokDateYmd } from "./env";
+import { fetchReelThumbnail } from "./thumbnail";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
@@ -36,12 +37,40 @@ async function readJson<T>(request: Request): Promise<T | null> {
   }
 }
 
+function sourceUrlFromInbox(row: {
+  text: string | null;
+  reels_json: string | null;
+}): string | null {
+  try {
+    const reels = JSON.parse(row.reels_json || "[]") as { url?: string }[];
+    const reelUrl = reels.find((r) => typeof r.url === "string" && r.url)?.url;
+    if (reelUrl) {
+      return reelUrl;
+    }
+  } catch {
+    // ignore malformed JSON
+  }
+  if (row.text?.includes("http")) {
+    const match = row.text.match(/https?:\/\/\S+/);
+    return match?.[0] ?? null;
+  }
+  return null;
+}
+
 export async function handleApi(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
 
   if (path === "/api/health" && request.method === "GET") {
     return json({ ok: true, service: "mooyoung" });
+  }
+
+  if (path === "/api/thumbnail" && request.method === "GET") {
+    const target = url.searchParams.get("url")?.trim();
+    if (!target) {
+      return badRequest("url is required");
+    }
+    return fetchReelThumbnail(target, request.url);
   }
 
   if (path === "/api/places") {
@@ -169,6 +198,8 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       return badRequest("invalid json");
     }
 
+    const inboxSourceUrl = sourceUrlFromInbox(row);
+
     if (body.promote_place && typeof body.promote_place === "object") {
       const p = body.promote_place;
       if (typeof p.name === "string" && p.name.trim()) {
@@ -180,7 +211,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
           price_level: (p.price_level as string) ?? null,
           rating: null,
           maps_url: (p.maps_url as string) ?? null,
-          source_url: row.text?.includes("http") ? row.text : null,
+          source_url: inboxSourceUrl,
           image_url: null,
           lat: typeof p.lat === "number" ? p.lat : null,
           lng: typeof p.lng === "number" ? p.lng : null,
@@ -204,7 +235,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
           restaurant_name: (f.restaurant_name as string) ?? null,
           place_id: typeof f.place_id === "number" ? f.place_id : null,
           price: null,
-          source_url: null,
+          source_url: inboxSourceUrl,
           image_url: null,
           status: "want_to_go",
           added_by: row.added_by,
