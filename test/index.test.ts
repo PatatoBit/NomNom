@@ -11,6 +11,8 @@ describe("MooYoung worker", () => {
     expect(html).toContain("MooYoung");
     expect(html).toContain("Miyu &amp; Pat");
     expect(html).toContain('const CARTO_API_KEY = "test_carto_api_key"');
+    expect(html).toContain(".png?key=' + encodeURIComponent(CARTO_API_KEY)");
+    expect(html).not.toContain("?api_key=");
     expect(response.headers.get("Content-Type")).toContain("text/html");
   });
 
