@@ -48,6 +48,7 @@ export interface MessagingEvent {
 }
 
 export interface WebhookEntry {
+  id?: string;
   messaging?: MessagingEvent[];
 }
 
