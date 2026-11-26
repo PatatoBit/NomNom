@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { handleWebhookVerification } from "../src/webhook-get";
 import type { Env } from "../src/env";
 
-const env: Env = {
+const env = {
   WEBHOOK_VERIFY_TOKEN: "my_verify_token",
   INSTAGRAM_APP_SECRET: "secret",
   INSTAGRAM_ACCESS_TOKEN: "token",
-};
+} as Env;
 
 function verificationUrl(params: Record<string, string>): string {
   const search = new URLSearchParams(params);

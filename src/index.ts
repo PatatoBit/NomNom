@@ -1,6 +1,8 @@
+import { handleApi } from "./api";
+import type { Env } from "./env";
+import { serveAppHtml } from "./html";
 import { handleWebhookVerification } from "./webhook-get";
 import { handleWebhookPost } from "./webhook-post";
-import type { Env } from "./env";
 
 export default {
   async fetch(
@@ -12,7 +14,14 @@ export default {
     const path = url.pathname;
 
     if (path === "/" && request.method === "GET") {
-      return Response.json({ ok: true, service: "mooyoung" });
+      return serveAppHtml();
+    }
+
+    if (path.startsWith("/api/")) {
+      const apiResponse = await handleApi(request, env);
+      if (apiResponse) {
+        return apiResponse;
+      }
     }
 
     if (path === "/webhook" && request.method === "GET") {

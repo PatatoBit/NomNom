@@ -6,6 +6,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { env as workerEnv } from "cloudflare:test";
 import type { Env } from "../src/env";
 import {
   clearUsernameCacheForTests,
@@ -14,6 +15,7 @@ import {
 } from "../src/webhook-post";
 
 const baseEnv: Env = {
+  ...(workerEnv as unknown as Env),
   WEBHOOK_VERIFY_TOKEN: "verify",
   INSTAGRAM_APP_SECRET: "test_app_secret",
   INSTAGRAM_ACCESS_TOKEN: "ig_token",
@@ -44,6 +46,11 @@ const mockFetch = vi.fn();
 beforeEach(() => {
   clearUsernameCacheForTests();
   vi.stubGlobal("fetch", mockFetch);
+  baseEnv.AI = {
+    run: vi.fn().mockResolvedValue({
+      response: JSON.stringify({ kind: "unclear" }),
+    }),
+  } as unknown as Ai;
 });
 
 afterEach(() => {
@@ -120,12 +127,6 @@ describe("sender lookup and allowlist", () => {
     expect(lookupUrl).toBe(
       "https://graph.facebook.com/v27.0/sender-1?fields=username",
     );
-    const mooyoungLogs = logSpy.mock.calls.filter(
-      (c) =>
-        typeof c[0] === "string" &&
-        c[0].includes('"type":"mooyoung_event"'),
-    );
-    expect(mooyoungLogs).toHaveLength(0);
     logSpy.mockRestore();
   });
 
@@ -143,7 +144,7 @@ describe("sender lookup and allowlist", () => {
             {
               sender: { id: "sender-2" },
               timestamp: 1,
-              message: { mid: "m2", text: "reel please" },
+              message: { mid: "m2-unique-" + Date.now(), text: "reel please" },
             },
           ],
         },
@@ -185,7 +186,7 @@ describe("forwarding", () => {
           messaging: [
             {
               sender: { id: "s3" },
-              message: { mid: "m3", text: "solo" },
+              message: { mid: "m3-" + Date.now(), text: "solo" },
             },
           ],
         },
@@ -223,7 +224,7 @@ describe("forwarding", () => {
           messaging: [
             {
               sender: { id: "s4" },
-              message: { mid: "m4", text: "forward me" },
+              message: { mid: "m4-" + Date.now(), text: "forward me" },
             },
           ],
         },
@@ -264,7 +265,7 @@ describe("forwarding", () => {
           messaging: [
             {
               sender: { id: "s5" },
-              message: { mid: "m5", text: "custom header" },
+              message: { mid: "m5-" + Date.now(), text: "custom header" },
             },
           ],
         },

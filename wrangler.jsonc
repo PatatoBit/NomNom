@@ -11,5 +11,16 @@
   },
   "vars": {
     "ALLOWED_USERNAMES": "patato.jpeg,youthkid9048"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mooyoung-db",
+      "database_id": "ec7bcce0-f3f6-4a4b-8a54-7b0851605d1d",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
   }
 }

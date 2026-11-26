@@ -6,6 +6,7 @@ import {
   isProcessableMessageEvent,
 } from "./extract";
 import { forwardEvent } from "./forward";
+import { processNormalizedEvent } from "./pipeline";
 import { lookupInstagramUsername } from "./instagram";
 import type { WebhookPayload } from "./types";
 
@@ -71,8 +72,7 @@ export async function processWebhookPayload(
     }
 
     const normalized = buildNormalizedEvent(event, username);
-    console.log(JSON.stringify({ type: "mooyoung_event", ...normalized }));
-    await forwardEvent(env, normalized);
+    await processNormalizedEvent(env, normalized);
   }
 }
 

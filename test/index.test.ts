@@ -4,11 +4,13 @@ import { describe, expect, it } from "vitest";
 const TEST_VERIFY_TOKEN = "test_verify_token";
 
 describe("MooYoung worker", () => {
-  it("GET / returns health JSON", async () => {
+  it("GET / returns HTML app", async () => {
     const response = await SELF.fetch("https://example.com/");
     expect(response.status).toBe(200);
-    const json = (await response.json()) as { ok: boolean; service: string };
-    expect(json).toEqual({ ok: true, service: "mooyoung" });
+    const html = await response.text();
+    expect(html).toContain("MooYoung");
+    expect(html).toContain("Miyu &amp; Pat");
+    expect(response.headers.get("Content-Type")).toContain("text/html");
   });
 
   it("GET /webhook returns 403 without valid token in dev", async () => {
