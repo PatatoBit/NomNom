@@ -6,241 +6,611 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
   <title>MooYoung | Miyu &amp; Pat's Nom Nom List</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #fff8f3;
-      --bg-card: #ffffff;
-      --ink: #2b2118;
-      --muted: #6b5d52;
-      --accent: #e85d4c;
-      --accent-soft: #ffe8e3;
-      --success: #2d8a5c;
-      --border: #ecd9cc;
-      --shadow: 0 8px 28px rgba(74, 40, 20, 0.08);
-      --radius: 14px;
-      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --bg: #ffffff;
+      --ink: #000000;
+      --muted: rgba(0, 0, 0, 0.4);
+      --muted-soft: rgba(0, 0, 0, 0.3);
+      --line: rgba(0, 0, 0, 0.1);
+      --line-strong: #000000;
+      --surface-soft: rgba(0, 0, 0, 0.05);
+      --surface-mid: rgba(0, 0, 0, 0.1);
+      --accent: #5167f4;
+      --highlight: #feee5d;
+      --purple: #be9cf3;
+      --green: #23ffa1;
+      --danger: #cd2c54;
+      --radius-s: 6px;
+      --radius-m: 12px;
+      --radius-l: 16px;
+      --radius-pill: 256px;
+      --row-h: 42px;
+      --control-h: 40px;
+      --font: "Switzer", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --shadow-float: 0 8px 16px rgba(0, 0, 0, 0.1);
+      --ease: 0.15s ease;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       font-family: var(--font);
       color: var(--ink);
-      background: radial-gradient(circle at top, #fff1e6 0%, var(--bg) 55%);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .app {
       min-height: 100vh;
-    }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
-    header {
-      text-align: center;
-      padding: 12px 0 20px;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 2.4rem;
-      letter-spacing: -0.02em;
-    }
-    header p { margin: 8px 0 0; color: var(--muted); font-size: 1.05rem; }
-    .stats {
       display: flex;
+      flex-direction: column;
+      padding: 28px 28px 80px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    @media (max-width: 720px) {
+      .app { padding: 18px 16px 88px; }
+    }
+
+    /* Header — Tweek month/title pattern */
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .brand-block { min-width: 0; }
+    .brand-row {
+      display: flex;
+      align-items: baseline;
       flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin-top: 16px;
+      gap: 10px 14px;
     }
-    .stat {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 14px;
-      font-size: 0.9rem;
-      box-shadow: var(--shadow);
+    .brand {
+      margin: 0;
+      font-size: 31px;
+      line-height: 40px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
     }
-    .stat strong { color: var(--accent); }
-    .badge-review {
-      background: var(--accent-soft);
-      color: var(--accent);
-      border-color: #f5b8ae;
+    .brand-meta {
+      font-size: 31px;
+      line-height: 40px;
+      font-weight: 700;
+      color: var(--muted-soft);
+      letter-spacing: -0.03em;
     }
+    .tagline {
+      margin: 6px 0 0;
+      font-size: 15px;
+      line-height: 20px;
+      color: var(--muted);
+      max-width: 420px;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--purple);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .circle-btn {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform var(--ease);
+    }
+    .circle-btn:hover { transform: scale(1.06); }
+    .circle-btn svg { width: 14px; height: 14px; }
+
+    /* Tabs as quiet text nav */
     .tabs {
       display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 20px 0;
-      justify-content: center;
+      gap: 22px;
+      align-items: center;
+      margin-bottom: 22px;
+      border-bottom: 1px solid var(--line);
     }
     .tab-btn {
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      border-radius: 999px;
-      padding: 10px 18px;
-      cursor: pointer;
+      appearance: none;
+      border: 0;
+      background: transparent;
+      padding: 0 0 12px;
+      margin: 0;
+      font-size: 15px;
+      line-height: 20px;
       font-weight: 600;
       color: var(--muted);
+      cursor: pointer;
+      position: relative;
+      transition: color var(--ease);
     }
-    .tab-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+    .tab-btn:hover { color: var(--ink); }
+    .tab-btn.active { color: var(--ink); }
+    .tab-btn.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: var(--ink);
     }
+    .tab-count {
+      margin-left: 6px;
+      font-weight: 500;
+      color: var(--muted-soft);
+    }
+    .tab-btn.active .tab-count { color: var(--muted); }
+    .tab-btn.has-alert .tab-count { color: var(--danger); }
+
     .panel { display: none; }
     .panel.active { display: block; }
+
+    /* Filters — hairline toolbar */
     .filters {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
       margin: 0 0 18px;
-      padding: 14px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
     }
-    .filters input, .filters select {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 8px 10px;
-      font: inherit;
+    .filters input,
+    .filters select {
+      height: 36px;
+      border: 0;
+      border-radius: var(--radius-pill);
+      padding: 0 14px;
+      background: var(--surface-soft);
+      outline: none;
+      min-width: 0;
+    }
+    .filters input:focus,
+    .filters select:focus {
+      box-shadow: inset 0 0 0 1.5px var(--ink);
       background: #fff;
     }
+    .filters input[type="search"] { flex: 1 1 180px; min-width: 160px; }
+
+    /* Map */
     #map {
-      height: 420px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      margin-bottom: 12px;
+      height: 280px;
+      border-radius: var(--radius-l);
+      border: 1px solid var(--line);
+      margin-bottom: 8px;
       overflow: hidden;
+      background: #f5f5f5;
     }
     .off-map {
-      font-size: 0.92rem;
+      font-size: 14px;
+      line-height: 20px;
       color: var(--muted);
+      margin: 0 0 22px;
+      min-height: 1.2em;
+    }
+
+    /* Board columns — Tweek day columns */
+    .board {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px 32px;
       margin-bottom: 18px;
     }
-    .masonry {
-      column-count: 1;
-      column-gap: 16px;
+    @media (max-width: 820px) {
+      .board { grid-template-columns: 1fr; gap: 28px; }
     }
-    @media (min-width: 640px) { .masonry { column-count: 2; } }
-    @media (min-width: 960px) { .masonry { column-count: 3; } }
-    .card {
-      break-inside: avoid;
-      margin-bottom: 16px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+    .col-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--line-strong);
+      margin-bottom: 0;
+    }
+    .col-head.accent { border-bottom-color: var(--accent); }
+    .col-head.accent .col-title,
+    .col-head.accent .col-side { color: var(--accent); }
+    .col-title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .col-side {
+      font-size: 15px;
+      line-height: 20px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .ruled {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: var(--row-h);
+      border-bottom: 1px solid var(--line);
+      padding: 6px 0;
+    }
+    .row:hover { background: linear-gradient(var(--surface-soft), var(--surface-soft)); }
+    .thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
       overflow: hidden;
-      box-shadow: var(--shadow);
+      background: var(--surface-mid);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      flex-shrink: 0;
     }
-    .card-img {
-      aspect-ratio: 4/3;
-      background: linear-gradient(135deg, #ffd8c8, #fff2ea);
+    .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .row-main { min-width: 0; }
+    .row-title {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 2.5rem;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 15px;
+      line-height: 20px;
+      font-weight: 500;
     }
-    .card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .card-body { padding: 14px; }
-    .card h3 { margin: 0; font-size: 1.05rem; line-height: 1.35; }
-    .meta { color: var(--muted); font-size: 0.88rem; margin-top: 6px; }
-    .status {
-      margin-top: 8px;
-      font-size: 0.88rem;
+    .row-title .name { font-weight: 600; }
+    .chip {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--highlight);
+      font-size: 13px;
+      line-height: 18px;
       font-weight: 600;
-      color: var(--accent);
     }
-    .status.done { color: var(--success); }
-    .links { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.88rem; }
-    .links a { color: var(--accent); }
-    .actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .btn {
-      border: 1px solid var(--border);
-      background: #fff;
-      border-radius: 10px;
-      padding: 6px 10px;
-      font-size: 0.82rem;
+    .chip.done { background: var(--green); color: var(--ink); }
+    .chip.blue { background: #dce1fd; color: var(--accent); }
+    .row-meta {
+      margin-top: 2px;
+      font-size: 12px;
+      line-height: 18px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity var(--ease);
+    }
+    .row:hover .row-actions,
+    .row:focus-within .row-actions { opacity: 1; }
+    @media (hover: none) {
+      .row-actions { opacity: 1; }
+    }
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
       cursor: pointer;
     }
-    .btn-primary {
-      background: var(--accent);
+    .icon-btn:hover { background: var(--surface-soft); color: var(--ink); }
+    .icon-btn.danger:hover { color: var(--danger); }
+    .icon-btn svg { width: 14px; height: 14px; }
+    .check {
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid var(--muted-soft);
+      border-radius: 50%;
+      background: transparent;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      padding: 0;
+      transition: transform 90ms ease-out, background var(--ease), border-color var(--ease);
+      color: transparent;
+    }
+    .check:hover { transform: scale(1.15); border-color: var(--ink); }
+    .check.on {
+      background: var(--ink);
+      border-color: var(--ink);
       color: #fff;
-      border-color: var(--accent);
     }
-    .inbox-item {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-bottom: 12px;
-      background: var(--bg-card);
+    .check svg { width: 12px; height: 12px; }
+
+    .empty {
+      min-height: calc(var(--row-h) * 3);
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 15px;
+      line-height: var(--row-h);
+      padding: 0;
     }
+
     .toolbar {
       display: flex;
       gap: 8px;
-      margin-bottom: 16px;
       flex-wrap: wrap;
+      margin-top: 8px;
     }
+
+    /* Buttons */
+    .btn {
+      height: var(--control-h);
+      border: 0;
+      border-radius: var(--radius-pill);
+      padding: 0 18px;
+      background: var(--surface-soft);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform var(--ease), background var(--ease);
+    }
+    .btn:hover { background: var(--surface-mid); }
+    .btn-primary {
+      background: var(--ink);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #222; }
+    .btn-sm {
+      height: 28px;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+
+    /* Inbox */
+    .inbox-item {
+      border-bottom: 1px solid var(--line);
+      padding: 14px 0;
+    }
+    .inbox-item p {
+      margin: 6px 0 0;
+      font-size: 15px;
+      line-height: 22px;
+    }
+    .inbox-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    /* Floating about / stats pill */
+    .float-pill {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 40px;
+      padding: 0 16px;
+      border-radius: var(--radius-pill);
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-float);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .float-pill span { color: var(--muted); font-weight: 500; }
+    .float-pill strong { color: var(--ink); }
+
+    /* Dialog */
     dialog {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      max-width: 480px;
+      border: 0;
+      border-radius: var(--radius-l);
+      padding: 0;
+      max-width: 420px;
       width: calc(100% - 32px);
+      box-shadow: var(--shadow-float);
     }
-    dialog form label {
+    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    dialog form { padding: 22px; }
+    dialog h3 {
+      margin: 0 0 8px;
+      font-size: 21px;
+      line-height: 24px;
+      letter-spacing: -0.02em;
+    }
+    dialog label {
       display: block;
-      font-size: 0.85rem;
-      margin: 10px 0 4px;
+      font-size: 13px;
+      margin: 12px 0 4px;
       color: var(--muted);
+      font-weight: 500;
     }
     dialog input, dialog select, dialog textarea {
       width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 8px;
-      font: inherit;
+      border: 0;
+      border-radius: var(--radius-s);
+      padding: 10px 12px;
+      background: var(--surface-soft);
+      outline: none;
     }
+    dialog input:focus, dialog select:focus, dialog textarea:focus {
+      box-shadow: inset 0 0 0 1.5px var(--ink);
+      background: #fff;
+    }
+    dialog textarea { min-height: 80px; resize: vertical; }
+    .dlg-actions {
+      margin-top: 18px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
     .city-badge {
       display: inline-block;
-      background: #f0e6dc;
-      border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 0.8rem;
-      margin-top: 6px;
+      background: var(--surface-soft);
+      border-radius: var(--radius-pill);
+      padding: 1px 8px;
+      font-size: 12px;
+      color: var(--muted);
     }
+
+    .stats-popover {
+      display: none;
+      position: fixed;
+      right: 20px;
+      bottom: 76px;
+      z-index: 41;
+      width: min(280px, calc(100vw - 40px));
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-l);
+      box-shadow: var(--shadow-float);
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 22px;
+      pointer-events: auto;
+    }
+    .stats-popover.open { display: block; }
+    .stats-popover .stat-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0;
+    }
+    .stats-popover .stat-line:last-child { border-bottom: 0; }
+    .stats-popover .stat-line span { color: var(--muted); }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>MooYoung</h1>
-      <p>Miyu &amp; Pat's Nom Nom List</p>
-      <p style="font-size:0.92rem;max-width:520px;margin:10px auto 0;">Restaurants, dishes, and recipes we want to try, and the ones we have already tried.</p>
-      <div class="stats" id="stats"></div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-row">
+          <h1 class="brand">MooYoung</h1>
+          <span class="brand-meta" id="brand-meta">Nom Nom</span>
+        </div>
+        <p class="tagline">Miyu &amp; Pat's Nom Nom List — restaurants, dishes, and recipes to try.</p>
+      </div>
+      <div class="top-actions">
+        <div class="avatar" title="Miyu &amp; Pat">MP</div>
+        <button class="circle-btn" type="button" id="reload-btn" title="Refresh" aria-label="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
     </header>
-    <div class="tabs" role="tablist">
-      <button class="tab-btn active" data-tab="places" type="button">Places</button>
-      <button class="tab-btn" data-tab="foods" type="button">Foods</button>
-      <button class="tab-btn" data-tab="inbox" type="button">DM Inbox</button>
-    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="places" type="button">Places<span class="tab-count" id="tab-places-count"></span></button>
+      <button class="tab-btn" data-tab="foods" type="button">Foods<span class="tab-count" id="tab-foods-count"></span></button>
+      <button class="tab-btn" data-tab="inbox" type="button" id="tab-inbox">Inbox<span class="tab-count" id="tab-inbox-count"></span></button>
+    </nav>
+
     <section id="panel-places" class="panel active">
       <div class="filters" id="place-filters"></div>
       <div id="map"></div>
       <p class="off-map" id="off-map-note"></p>
+      <div class="board">
+        <div>
+          <div class="col-head accent">
+            <h2 class="col-title">Want to go</h2>
+            <span class="col-side" id="want-count">0</span>
+          </div>
+          <ul class="ruled" id="places-want"></ul>
+        </div>
+        <div>
+          <div class="col-head">
+            <h2 class="col-title">Visited</h2>
+            <span class="col-side" id="visited-count">0</span>
+          </div>
+          <ul class="ruled" id="places-visited"></ul>
+        </div>
+      </div>
       <div class="toolbar">
         <button class="btn btn-primary" type="button" id="add-place-btn">Add place</button>
       </div>
-      <div class="masonry" id="places-grid"></div>
     </section>
+
     <section id="panel-foods" class="panel">
       <div class="filters" id="food-filters"></div>
+      <div class="board">
+        <div>
+          <div class="col-head accent">
+            <h2 class="col-title">Want to try</h2>
+            <span class="col-side" id="food-want-count">0</span>
+          </div>
+          <ul class="ruled" id="foods-want"></ul>
+        </div>
+        <div>
+          <div class="col-head">
+            <h2 class="col-title">Tried</h2>
+            <span class="col-side" id="food-tried-count">0</span>
+          </div>
+          <ul class="ruled" id="foods-tried"></ul>
+        </div>
+      </div>
       <div class="toolbar">
         <button class="btn btn-primary" type="button" id="add-food-btn">Add food</button>
       </div>
-      <div class="masonry" id="foods-grid"></div>
     </section>
+
     <section id="panel-inbox" class="panel">
       <div id="inbox-list"></div>
     </section>
   </div>
+
+  <button class="float-pill" type="button" id="stats-toggle" aria-expanded="false">Stats <span id="stats-summary"></span></button>
+  <div class="stats-popover" id="stats-popover"></div>
+
   <dialog id="edit-dialog"></dialog>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
@@ -255,7 +625,11 @@ ${APP_SCRIPT}
 }
 
 const APP_SCRIPT = `
-const state = { places: [], foods: [], inbox: [], map: null, markers: [] };
+const state = { places: [], foods: [], inbox: [], map: null, markers: [], statsOpen: false };
+
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>';
+const EDIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
 
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -265,13 +639,11 @@ function isBangkok(lat, lng) {
   return lat > 13 && lat < 15 && lng > 99.5 && lng < 101.5;
 }
 
-function placeholderEmoji(cuisine) {
-  const c = (cuisine || '').toLowerCase();
-  if (c.includes('japanese')) return '🍜';
-  if (c.includes('thai')) return '🍲';
-  if (c.includes('korean')) return '🌶️';
-  if (c.includes('chinese')) return '🥢';
-  return '🍽️';
+function initials(name) {
+  const parts = String(name || '').trim().split(/\\s+/).filter(Boolean);
+  if (!parts.length) return '·';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 async function api(path, opts) {
@@ -282,15 +654,25 @@ async function api(path, opts) {
 
 function renderStats() {
   const visited = state.places.filter(p => p.status === 'visited').length;
+  const want = state.places.length - visited;
   const tried = state.foods.filter(f => f.status === 'tried').length;
+  const foodWant = state.foods.length - tried;
   const review = state.inbox.filter(i => i.result_status === 'needs_review').length;
-  const el = document.getElementById('stats');
-  el.innerHTML =
-    '<span class="stat"><strong>' + state.places.length + '</strong> Places</span>' +
-    '<span class="stat"><strong>' + state.foods.length + '</strong> Foods</span>' +
-    '<span class="stat"><strong>' + visited + '</strong> Visited</span>' +
-    '<span class="stat"><strong>' + tried + '</strong> Tried</span>' +
-    (review ? '<span class="stat badge-review"><strong>' + review + '</strong> Needs review</span>' : '');
+
+  document.getElementById('brand-meta').textContent = state.places.length + ' places';
+  document.getElementById('tab-places-count').textContent = String(state.places.length || '');
+  document.getElementById('tab-foods-count').textContent = String(state.foods.length || '');
+  document.getElementById('tab-inbox-count').textContent = review ? String(review) : String(state.inbox.length || '');
+  document.getElementById('tab-inbox').classList.toggle('has-alert', review > 0);
+
+  document.getElementById('stats-summary').textContent = '· ' + want + ' open';
+  document.getElementById('stats-popover').innerHTML =
+    '<div class="stat-line"><span>Places</span><strong>' + state.places.length + '</strong></div>' +
+    '<div class="stat-line"><span>Want to go</span><strong>' + want + '</strong></div>' +
+    '<div class="stat-line"><span>Visited</span><strong>' + visited + '</strong></div>' +
+    '<div class="stat-line"><span>Foods</span><strong>' + state.foods.length + '</strong></div>' +
+    '<div class="stat-line"><span>Tried</span><strong>' + tried + '</strong></div>' +
+    (review ? '<div class="stat-line"><span>Needs review</span><strong>' + review + '</strong></div>' : '');
 }
 
 function buildPlaceFilters() {
@@ -298,12 +680,11 @@ function buildPlaceFilters() {
   const cuisines = [...new Set(state.places.map(p => p.cuisine).filter(Boolean))].sort();
   const el = document.getElementById('place-filters');
   el.innerHTML =
-    '<input type="search" id="pf-search" placeholder="Search places..." />' +
+    '<input type="search" id="pf-search" placeholder="Search places" />' +
     '<select id="pf-area"><option value="">All areas</option>' + areas.map(a => '<option>' + esc(a) + '</option>').join('') + '</select>' +
     '<select id="pf-cuisine"><option value="">All cuisines</option>' + cuisines.map(c => '<option>' + esc(c) + '</option>').join('') + '</select>' +
-    '<select id="pf-price"><option value="">Any price</option><option>฿</option><option>$$</option><option>$$$</option></select>' +
-    '<select id="pf-status"><option value="">All</option><option value="want_to_go">Want to go</option><option value="visited">Visited</option></select>';
-  ['pf-search','pf-area','pf-cuisine','pf-price','pf-status'].forEach(id => {
+    '<select id="pf-price"><option value="">Any price</option><option>฿</option><option>$$</option><option>$$$</option></select>';
+  ['pf-search','pf-area','pf-cuisine','pf-price'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderPlaces);
     document.getElementById(id).addEventListener('change', renderPlaces);
   });
@@ -314,13 +695,11 @@ function filteredPlaces() {
   const area = document.getElementById('pf-area')?.value || '';
   const cuisine = document.getElementById('pf-cuisine')?.value || '';
   const price = document.getElementById('pf-price')?.value || '';
-  const status = document.getElementById('pf-status')?.value || '';
   return state.places.filter(p => {
-    if (q && !(p.name || '').toLowerCase().includes(q)) return false;
+    if (q && !(p.name || '').toLowerCase().includes(q) && !(p.area || '').toLowerCase().includes(q)) return false;
     if (area && p.area !== area) return false;
     if (cuisine && p.cuisine !== cuisine) return false;
     if (price && (p.price_level || '') !== price) return false;
-    if (status && p.status !== status) return false;
     return true;
   });
 }
@@ -336,20 +715,25 @@ function renderMap(places) {
     note.textContent = '';
   }
   if (!state.map) {
-    state.map = L.map('map', { scrollWheelZoom: false }).setView([13.7563, 100.5018], 11);
-    const tileUrl = CARTO_API_KEY
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_API_KEY)
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    L.tileLayer(tileUrl, {
-      attribution: '&copy; OSM &copy; CARTO',
-      maxZoom: 19
-    }).addTo(state.map);
+    state.map = L.map('map', { scrollWheelZoom: false, zoomControl: false }).setView([13.7563, 100.5018], 11);
+    L.control.zoom({ position: 'topright' }).addTo(state.map);
+    if (CARTO_API_KEY) {
+      L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_API_KEY),
+        { attribution: '&copy; OSM &copy; CARTO', maxZoom: 19 }
+      ).addTo(state.map);
+    } else {
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(state.map);
+    }
   }
   state.markers.forEach(m => state.map.removeLayer(m));
   state.markers = [];
   bkk.forEach(p => {
-    const color = p.status === 'visited' ? '#2d8a5c' : '#e85d4c';
-    const m = L.circleMarker([p.lat, p.lng], { radius: 9, color, fillColor: color, fillOpacity: 0.85, weight: 2 }).addTo(state.map);
+    const color = p.status === 'visited' ? '#000000' : '#5167f4';
+    const m = L.circleMarker([p.lat, p.lng], { radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 0 }).addTo(state.map);
     m.bindPopup('<strong>' + esc(p.name) + '</strong><br/>' + esc(p.area || ''));
     if (p.maps_url) m.on('click', () => window.open(p.maps_url, '_blank'));
     state.markers.push(m);
@@ -370,43 +754,46 @@ function isInstagramSource(url) {
   }
 }
 
-function cardPreview(item, cuisine) {
+function rowPreview(item, label) {
   if (item.image_url) {
-    return '<img src="' + esc(item.image_url) + '" alt="" loading="lazy" />';
+    return '<span class="thumb"><img src="' + esc(item.image_url) + '" alt="" loading="lazy" /></span>';
   }
   if (isInstagramSource(item.source_url)) {
-    return '<img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" />';
+    return '<span class="thumb"><img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" /></span>';
   }
-  return '<span>' + placeholderEmoji(cuisine) + '</span>';
+  return '<span class="thumb">' + esc(initials(label || item.name)) + '</span>';
 }
 
-function placeCard(p) {
-  const img = cardPreview(p, p.cuisine);
-  const statusLabel = p.status === 'visited' ? 'Visited' + (p.visit_date ? ' ' + esc(p.visit_date) : '') : 'Want to go';
-  return '<article class="card" data-id="' + p.id + '">' +
-    '<div class="card-img">' + img + '</div>' +
-    '<div class="card-body">' +
-    '<h3>' + esc(p.name) + '</h3>' +
-    '<div class="meta">' + esc([p.area, p.city, p.cuisine, p.price_level].filter(Boolean).join(' · ')) + '</div>' +
-    (p.rating ? '<div class="meta">' + esc(p.rating) + ' Google</div>' : '') +
-  (!isBangkok(p.lat, p.lng) && p.city ? '<span class="city-badge">' + esc(p.city) + '</span>' : '') +
-    '<div class="status' + (p.status === 'visited' ? ' done' : '') + '">' + statusLabel + '</div>' +
-    '<div class="links">' +
-    (p.maps_url ? '<a href="' + esc(p.maps_url) + '" target="_blank" rel="noreferrer">Maps</a>' : '') +
-    (p.source_url ? '<a href="' + esc(p.source_url) + '" target="_blank" rel="noreferrer">Source</a>' : '') +
+function placeRow(p) {
+  const done = p.status === 'visited';
+  const thumb = rowPreview(p, p.name);
+  const meta = [p.area, p.city, p.cuisine, p.price_level].filter(Boolean).join(' · ');
+  const chip = done && p.visit_date ? '<span class="chip done">' + esc(p.visit_date) + '</span>' : '';
+  const city = (!isBangkok(p.lat, p.lng) && p.city) ? ' <span class="city-badge">' + esc(p.city) + '</span>' : '';
+  return '<li class="row" data-id="' + p.id + '">' +
+    thumb +
+    '<div class="row-main">' +
+      '<div class="row-title"><span class="name">' + esc(p.name) + '</span>' + chip + city + '</div>' +
+      (meta ? '<div class="row-meta">' + esc(meta) + (p.rating ? ' · ' + esc(p.rating) + ' Google' : '') + '</div>' : '') +
     '</div>' +
-    '<div class="meta">Added by ' + esc(p.added_by || '?') + ', ' + esc(p.added_date || '') + '</div>' +
-    (p.notes ? '<div class="meta">' + esc(p.notes) + '</div>' : '') +
-    '<div class="actions">' +
-    '<button class="btn" data-action="toggle-place" data-id="' + p.id + '">' + (p.status === 'visited' ? 'Mark want to go' : 'Mark visited') + '</button>' +
-    '<button class="btn" data-action="edit-place" data-id="' + p.id + '">Edit</button>' +
-    '<button class="btn" data-action="delete-place" data-id="' + p.id + '">Delete</button>' +
-    '</div></div></article>';
+    '<div style="display:flex;align-items:center;gap:4px">' +
+      '<div class="row-actions">' +
+        (p.maps_url ? '<a class="icon-btn" href="' + esc(p.maps_url) + '" target="_blank" rel="noreferrer" title="Maps" aria-label="Maps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></a>' : '') +
+        '<button class="icon-btn" data-action="edit-place" data-id="' + p.id + '" title="Edit" aria-label="Edit">' + EDIT_SVG + '</button>' +
+        '<button class="icon-btn danger" data-action="delete-place" data-id="' + p.id + '" title="Delete" aria-label="Delete">' + TRASH_SVG + '</button>' +
+      '</div>' +
+      '<button class="check' + (done ? ' on' : '') + '" data-action="toggle-place" data-id="' + p.id + '" title="' + (done ? 'Mark want to go' : 'Mark visited') + '" aria-label="Toggle visited">' + CHECK_SVG + '</button>' +
+    '</div></li>';
 }
 
 function renderPlaces() {
   const list = filteredPlaces();
-  document.getElementById('places-grid').innerHTML = list.map(placeCard).join('');
+  const want = list.filter(p => p.status !== 'visited');
+  const visited = list.filter(p => p.status === 'visited');
+  document.getElementById('want-count').textContent = String(want.length);
+  document.getElementById('visited-count').textContent = String(visited.length);
+  document.getElementById('places-want').innerHTML = want.length ? want.map(placeRow).join('') : '<li class="empty">Keep places here without a visit yet</li>';
+  document.getElementById('places-visited').innerHTML = visited.length ? visited.map(placeRow).join('') : '<li class="empty">Nothing visited yet</li>';
   renderMap(list);
 }
 
@@ -414,10 +801,9 @@ function buildFoodFilters() {
   const el = document.getElementById('food-filters');
   const cuisines = [...new Set(state.foods.map(f => f.cuisine).filter(Boolean))].sort();
   el.innerHTML =
-    '<input type="search" id="ff-search" placeholder="Search foods..." />' +
-    '<select id="ff-cuisine"><option value="">All cuisines</option>' + cuisines.map(c => '<option>' + esc(c) + '</option>').join('') + '</select>' +
-    '<select id="ff-status"><option value="">All</option><option value="want_to_go">Want to try</option><option value="tried">Tried</option></select>';
-  ['ff-search','ff-cuisine','ff-status'].forEach(id => {
+    '<input type="search" id="ff-search" placeholder="Search foods" />' +
+    '<select id="ff-cuisine"><option value="">All cuisines</option>' + cuisines.map(c => '<option>' + esc(c) + '</option>').join('') + '</select>';
+  ['ff-search','ff-cuisine'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderFoods);
     document.getElementById(id).addEventListener('change', renderFoods);
   });
@@ -426,43 +812,47 @@ function buildFoodFilters() {
 function filteredFoods() {
   const q = (document.getElementById('ff-search')?.value || '').toLowerCase();
   const cuisine = document.getElementById('ff-cuisine')?.value || '';
-  const status = document.getElementById('ff-status')?.value || '';
   return state.foods.filter(f => {
     if (q && !(f.name || '').toLowerCase().includes(q)) return false;
     if (cuisine && f.cuisine !== cuisine) return false;
-    if (status && f.status !== status) return false;
     return true;
   });
 }
 
-function foodCard(f) {
-  const img = cardPreview(f, f.cuisine);
-  const statusLabel = f.status === 'tried' ? 'Tried' : 'Want to try';
-  return '<article class="card">' +
-    '<div class="card-img">' + img + '</div>' +
-    '<div class="card-body">' +
-    '<h3>' + esc(f.name) + '</h3>' +
-    '<div class="meta">' + esc([f.category, f.cuisine].filter(Boolean).join(' · ')) + '</div>' +
-    (f.restaurant_name ? '<div class="meta">At ' + esc(f.restaurant_name) + '</div>' : '') +
-    (f.notes ? '<div class="meta">' + esc(f.notes) + '</div>' : '') +
-    '<div class="status' + (f.status === 'tried' ? ' done' : '') + '">' + statusLabel + '</div>' +
-    '<div class="links">' + (f.source_url ? '<a href="' + esc(f.source_url) + '" target="_blank" rel="noreferrer">Source</a>' : '') + '</div>' +
-    '<div class="meta">Added by ' + esc(f.added_by || '?') + ', ' + esc(f.added_date || '') + '</div>' +
-    '<div class="actions">' +
-    '<button class="btn" data-action="toggle-food" data-id="' + f.id + '">' + (f.status === 'tried' ? 'Want to try' : 'Mark tried') + '</button>' +
-    '<button class="btn" data-action="edit-food" data-id="' + f.id + '">Edit</button>' +
-    '<button class="btn" data-action="delete-food" data-id="' + f.id + '">Delete</button>' +
-    '</div></div></article>';
+function foodRow(f) {
+  const done = f.status === 'tried';
+  const thumb = rowPreview(f, f.name);
+  const meta = [f.category, f.cuisine, f.restaurant_name ? 'At ' + f.restaurant_name : ''].filter(Boolean).join(' · ');
+  return '<li class="row">' +
+    thumb +
+    '<div class="row-main">' +
+      '<div class="row-title"><span class="name">' + esc(f.name) + '</span></div>' +
+      (meta ? '<div class="row-meta">' + esc(meta) + '</div>' : '') +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:4px">' +
+      '<div class="row-actions">' +
+        (f.source_url ? '<a class="icon-btn" href="' + esc(f.source_url) + '" target="_blank" rel="noreferrer" title="Source" aria-label="Source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M10 14 20 4"/><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/></svg></a>' : '') +
+        '<button class="icon-btn" data-action="edit-food" data-id="' + f.id + '" title="Edit" aria-label="Edit">' + EDIT_SVG + '</button>' +
+        '<button class="icon-btn danger" data-action="delete-food" data-id="' + f.id + '" title="Delete" aria-label="Delete">' + TRASH_SVG + '</button>' +
+      '</div>' +
+      '<button class="check' + (done ? ' on' : '') + '" data-action="toggle-food" data-id="' + f.id + '" title="' + (done ? 'Want to try' : 'Mark tried') + '" aria-label="Toggle tried">' + CHECK_SVG + '</button>' +
+    '</div></li>';
 }
 
 function renderFoods() {
-  document.getElementById('foods-grid').innerHTML = filteredFoods().map(foodCard).join('');
+  const list = filteredFoods();
+  const want = list.filter(f => f.status !== 'tried');
+  const tried = list.filter(f => f.status === 'tried');
+  document.getElementById('food-want-count').textContent = String(want.length);
+  document.getElementById('food-tried-count').textContent = String(tried.length);
+  document.getElementById('foods-want').innerHTML = want.length ? want.map(foodRow).join('') : '<li class="empty">Keep dishes here without tasting yet</li>';
+  document.getElementById('foods-tried').innerHTML = tried.length ? tried.map(foodRow).join('') : '<li class="empty">Nothing tried yet</li>';
 }
 
 function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!state.inbox.length) {
-    el.innerHTML = '<p class="meta">No DMs yet. Send reels to mooyoung.save on Instagram.</p>';
+    el.innerHTML = '<div class="empty">No DMs yet. Send reels to mooyoung.save on Instagram.</div>';
     return;
   }
   el.innerHTML = state.inbox.map(row => {
@@ -470,15 +860,15 @@ function renderInbox() {
     try { reels = JSON.parse(row.reels_json || '[]'); } catch (e) {}
     const reelLinks = reels.map(r => r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noreferrer">Reel</a>' : '').join(' ');
     const actions = row.result_status === 'needs_review'
-      ? '<button class="btn btn-primary" data-action="promote-place" data-id="' + row.id + '">Add as place</button>' +
-        '<button class="btn" data-action="promote-food" data-id="' + row.id + '">Add as food</button>' +
-        '<button class="btn" data-action="dismiss-inbox" data-id="' + row.id + '">Dismiss</button>'
-      : '<span class="meta">Status: ' + esc(row.result_status) + '</span>';
+      ? '<button class="btn btn-primary btn-sm" data-action="promote-place" data-id="' + row.id + '">Add as place</button>' +
+        '<button class="btn btn-sm" data-action="promote-food" data-id="' + row.id + '">Add as food</button>' +
+        '<button class="btn btn-sm" data-action="dismiss-inbox" data-id="' + row.id + '">Dismiss</button>'
+      : '<span class="row-meta">Status: ' + esc(row.result_status) + '</span>';
     return '<div class="inbox-item">' +
-      '<div class="meta">From @' + esc(row.sender_username) + ' · ' + esc(row.created_at) + '</div>' +
+      '<div class="row-meta">From @' + esc(row.sender_username) + ' · ' + esc(row.created_at) + '</div>' +
       '<p>' + esc(row.text || '(no text)') + '</p>' +
-      '<div class="links">' + reelLinks + '</div>' +
-      '<div class="actions">' + actions + '</div></div>';
+      (reelLinks ? '<div class="links">' + reelLinks + '</div>' : '') +
+      '<div class="inbox-actions">' + actions + '</div></div>';
   }).join('');
 }
 
@@ -509,10 +899,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+document.getElementById('reload-btn').onclick = () => reload().catch(err => console.error(err));
+
+document.getElementById('stats-toggle').onclick = () => {
+  state.statsOpen = !state.statsOpen;
+  document.getElementById('stats-popover').classList.toggle('open', state.statsOpen);
+  document.getElementById('stats-toggle').setAttribute('aria-expanded', state.statsOpen ? 'true' : 'false');
+};
+
 function openDialog(title, fields, onSubmit) {
   const dlg = document.getElementById('edit-dialog');
   dlg.innerHTML = '<form method="dialog"><h3>' + esc(title) + '</h3>' + fields +
-    '<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">' +
+    '<div class="dlg-actions">' +
     '<button type="button" class="btn" id="dlg-cancel">Cancel</button>' +
     '<button type="submit" class="btn btn-primary">Save</button></div></form>';
   dlg.showModal();
