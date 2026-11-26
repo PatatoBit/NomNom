@@ -138,7 +138,15 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
       justify-content: center;
       font-size: 2.5rem;
     }
-    .card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .card-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .card-img img.is-loaded { opacity: 1; }
     .card-body { padding: 14px; }
     .card h3 { margin: 0; font-size: 1.05rem; line-height: 1.35; }
     .meta { color: var(--muted); font-size: 0.88rem; margin-top: 6px; }
@@ -274,6 +282,37 @@ function placeholderEmoji(cuisine) {
   return '🍽️';
 }
 
+function previewFallback(img) {
+  const span = document.createElement('span');
+  span.textContent = placeholderEmoji(img.getAttribute('data-cuisine'));
+  img.replaceWith(span);
+}
+
+function wireCardImages(root) {
+  if (!root) return;
+  // load/error do not bubble; capture once per grid so later src changes still fallback.
+  if (root.dataset.imgWired !== '1') {
+    root.dataset.imgWired = '1';
+    root.addEventListener('load', (ev) => {
+      const img = ev.target;
+      if (img && img.matches && img.matches('.card-img img')) {
+        img.classList.add('is-loaded');
+      }
+    }, true);
+    root.addEventListener('error', (ev) => {
+      const img = ev.target;
+      if (img && img.matches && img.matches('.card-img img')) {
+        previewFallback(img);
+      }
+    }, true);
+  }
+  root.querySelectorAll('.card-img img').forEach((img) => {
+    if (!img.complete) return;
+    if (img.naturalWidth > 0) img.classList.add('is-loaded');
+    else previewFallback(img);
+  });
+}
+
 async function api(path, opts) {
   const res = await fetch(path, opts);
   if (!res.ok) throw new Error(await res.text());
@@ -371,11 +410,12 @@ function isInstagramSource(url) {
 }
 
 function cardPreview(item, cuisine) {
+  const cuisineAttr = ' data-cuisine="' + esc(cuisine || '') + '"';
   if (item.image_url) {
-    return '<img src="' + esc(item.image_url) + '" alt="" loading="lazy" />';
+    return '<img src="' + esc(item.image_url) + '" alt="" loading="lazy"' + cuisineAttr + ' />';
   }
   if (isInstagramSource(item.source_url)) {
-    return '<img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" />';
+    return '<img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy"' + cuisineAttr + ' />';
   }
   return '<span>' + placeholderEmoji(cuisine) + '</span>';
 }
@@ -406,7 +446,9 @@ function placeCard(p) {
 
 function renderPlaces() {
   const list = filteredPlaces();
-  document.getElementById('places-grid').innerHTML = list.map(placeCard).join('');
+  const grid = document.getElementById('places-grid');
+  grid.innerHTML = list.map(placeCard).join('');
+  wireCardImages(grid);
   renderMap(list);
 }
 
@@ -456,7 +498,9 @@ function foodCard(f) {
 }
 
 function renderFoods() {
-  document.getElementById('foods-grid').innerHTML = filteredFoods().map(foodCard).join('');
+  const grid = document.getElementById('foods-grid');
+  grid.innerHTML = filteredFoods().map(foodCard).join('');
+  wireCardImages(grid);
 }
 
 function renderInbox() {

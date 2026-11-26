@@ -70,7 +70,11 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     if (!target) {
       return badRequest("url is required");
     }
-    return fetchReelThumbnail(target, request.url);
+    return fetchReelThumbnail(
+      target,
+      request.url,
+      env.INSTAGRAM_ACCESS_TOKEN,
+    );
   }
 
   if (path === "/api/places") {
