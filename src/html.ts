@@ -338,7 +338,7 @@ function renderMap(places) {
   if (!state.map) {
     state.map = L.map('map', { scrollWheelZoom: false }).setView([13.7563, 100.5018], 11);
     const tileUrl = CARTO_API_KEY
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=' + encodeURIComponent(CARTO_API_KEY)
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_API_KEY)
       : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
     L.tileLayer(tileUrl, {
       attribution: '&copy; OSM &copy; CARTO',
