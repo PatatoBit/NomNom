@@ -1,0 +1,13 @@
+# Copy to .dev.vars for local development (never commit .dev.vars)
+
+WEBHOOK_VERIFY_TOKEN=your_meta_webhook_verify_token
+INSTAGRAM_APP_SECRET=your_meta_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_instagram_user_access_token
+
+# Optional: comma-separated allowlist (wrangler.jsonc also sets a default)
+# ALLOWED_USERNAMES=patato.jpeg,youthkid9048
+
+# Optional: forward normalized events to another service
+# FORWARD_WEBHOOK_URL=https://example.com/hooks/nomnom
+# FORWARD_WEBHOOK_SECRET=shared_secret_for_receiver
+# FORWARD_WEBHOOK_HEADER=X-Webhook-Secret
