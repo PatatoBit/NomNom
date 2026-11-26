@@ -529,6 +529,68 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
     }
     .stats-popover .stat-line:last-child { border-bottom: 0; }
     .stats-popover .stat-line span { color: var(--muted); }
+
+    .processing-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin: -18px 0 18px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      background: #fff;
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--ink);
+      cursor: pointer;
+      width: fit-content;
+      max-width: 100%;
+      transition: background var(--ease), border-color var(--ease);
+    }
+    .processing-banner.visible { display: inline-flex; }
+    .processing-banner:hover {
+      background: var(--surface-soft);
+      border-color: var(--line-strong);
+    }
+    .processing-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ink);
+      flex-shrink: 0;
+      animation: processing-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes processing-pulse {
+      0%, 100% { opacity: 0.35; transform: scale(0.92); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+    .processing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    .processing-badge .processing-dot { width: 6px; height: 6px; }
+    .row-processing {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-s);
+      margin-bottom: 4px;
+      opacity: 0.75;
+      pointer-events: none;
+    }
+    .row-processing .thumb {
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+    .inbox-item.is-processing { opacity: 0.92; }
   </style>
 </head>
 <body>
@@ -548,6 +610,11 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
         </button>
       </div>
     </header>
+
+    <button type="button" class="processing-banner" id="processing-banner" hidden aria-live="polite">
+      <span class="processing-dot" aria-hidden="true"></span>
+      <span id="processing-banner-text"></span>
+    </button>
 
     <nav class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="places" type="button">Places<span class="tab-count" id="tab-places-count"></span></button>
@@ -625,7 +692,79 @@ ${APP_SCRIPT}
 }
 
 const APP_SCRIPT = `
-const state = { places: [], foods: [], inbox: [], map: null, markers: [], statsOpen: false };
+const state = { places: [], foods: [], inbox: [], map: null, markers: [], statsOpen: false, filtersBuilt: false };
+const PROCESSING_STALE_MS = 5 * 60 * 1000;
+let pollTimer = null;
+let pollFingerprint = '';
+
+function parseCreatedAtMs(createdAt) {
+  if (!createdAt) return 0;
+  const normalized = createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T') + 'Z';
+  const t = Date.parse(normalized);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function isRecentProcessing(row) {
+  if (row.result_status !== 'processing') return false;
+  const age = Date.now() - parseCreatedAtMs(row.created_at);
+  return age >= 0 && age < PROCESSING_STALE_MS;
+}
+
+function recentProcessingItems() {
+  return state.inbox.filter(isRecentProcessing);
+}
+
+function inboxFingerprint(meta) {
+  return [
+    meta?.latest_inbox_id ?? 0,
+    meta?.processing_count ?? 0,
+    meta?.place_count ?? 0,
+    meta?.food_count ?? 0,
+    meta?.needs_review_count ?? 0,
+  ].join(':');
+}
+
+function activateTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + tab);
+  });
+  if (tab === 'places' && state.map) setTimeout(() => state.map.invalidateSize(), 80);
+}
+
+function renderProcessingBanner() {
+  const items = recentProcessingItems();
+  const banner = document.getElementById('processing-banner');
+  const text = document.getElementById('processing-banner-text');
+  if (!banner || !text) return;
+  if (!items.length) {
+    banner.classList.remove('visible');
+    banner.hidden = true;
+    return;
+  }
+  const first = items[0];
+  const handle = first.sender_username ? '@' + first.sender_username : 'Instagram';
+  text.textContent = items.length === 1
+    ? 'Processing new reel from ' + handle + '...'
+  : 'Processing ' + items.length + ' new reels...';
+  banner.classList.add('visible');
+  banner.hidden = false;
+}
+
+function processingPlaceholders() {
+  return recentProcessingItems().map(row => {
+    const handle = row.sender_username ? '@' + row.sender_username : 'Instagram';
+    return '<li class="row row-processing">' +
+      '<span class="thumb">···</span>' +
+      '<div class="row-main">' +
+        '<div class="row-title"><span class="name">New reel processing</span>' +
+          '<span class="processing-badge"><span class="processing-dot"></span>Processing</span></div>' +
+        '<div class="row-meta">From ' + esc(handle) + '</div>' +
+      '</div></li>';
+  }).join('');
+}
 
 const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>';
 const EDIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
@@ -790,11 +929,14 @@ function renderPlaces() {
   const list = filteredPlaces();
   const want = list.filter(p => p.status !== 'visited');
   const visited = list.filter(p => p.status === 'visited');
+  const placeholders = processingPlaceholders();
   document.getElementById('want-count').textContent = String(want.length);
   document.getElementById('visited-count').textContent = String(visited.length);
-  document.getElementById('places-want').innerHTML = want.length ? want.map(placeRow).join('') : '<li class="empty">Keep places here without a visit yet</li>';
+  const wantHtml = placeholders + (want.length ? want.map(placeRow).join('') : '');
+  document.getElementById('places-want').innerHTML = wantHtml || '<li class="empty">Keep places here without a visit yet</li>';
   document.getElementById('places-visited').innerHTML = visited.length ? visited.map(placeRow).join('') : '<li class="empty">Nothing visited yet</li>';
   renderMap(list);
+  renderProcessingBanner();
 }
 
 function buildFoodFilters() {
@@ -853,26 +995,44 @@ function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!state.inbox.length) {
     el.innerHTML = '<div class="empty">No DMs yet. Send reels to mooyoung.save on Instagram.</div>';
+    renderProcessingBanner();
     return;
   }
-  el.innerHTML = state.inbox.map(row => {
+  const sorted = [...state.inbox].sort((a, b) => {
+    const ap = a.result_status === 'processing' ? 1 : 0;
+    const bp = b.result_status === 'processing' ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return (b.id || 0) - (a.id || 0);
+  });
+  el.innerHTML = sorted.map(row => {
     let reels = [];
     try { reels = JSON.parse(row.reels_json || '[]'); } catch (e) {}
     const reelLinks = reels.map(r => r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noreferrer">Reel</a>' : '').join(' ');
-    const actions = row.result_status === 'needs_review'
+    const processing = row.result_status === 'processing';
+    const actions = processing
+      ? '<span class="processing-badge"><span class="processing-dot"></span>Processing...</span>'
+      : row.result_status === 'needs_review'
       ? '<button class="btn btn-primary btn-sm" data-action="promote-place" data-id="' + row.id + '">Add as place</button>' +
         '<button class="btn btn-sm" data-action="promote-food" data-id="' + row.id + '">Add as food</button>' +
         '<button class="btn btn-sm" data-action="dismiss-inbox" data-id="' + row.id + '">Dismiss</button>'
       : '<span class="row-meta">Status: ' + esc(row.result_status) + '</span>';
-    return '<div class="inbox-item">' +
+    return '<div class="inbox-item' + (processing ? ' is-processing' : '') + '">' +
       '<div class="row-meta">From @' + esc(row.sender_username) + ' · ' + esc(row.created_at) + '</div>' +
       '<p>' + esc(row.text || '(no text)') + '</p>' +
       (reelLinks ? '<div class="links">' + reelLinks + '</div>' : '') +
       '<div class="inbox-actions">' + actions + '</div></div>';
   }).join('');
+  renderProcessingBanner();
 }
 
-async function reload() {
+async function reload(opts) {
+  const preserveUi = opts?.preserveUi === true;
+  const activeTab = preserveUi
+    ? (document.querySelector('.tab-btn.active')?.dataset.tab || 'places')
+    : null;
+  const dlg = document.getElementById('edit-dialog');
+  const dialogOpen = preserveUi && dlg && dlg.open;
+
   const [places, foods, inbox] = await Promise.all([
     api('/api/places'),
     api('/api/foods'),
@@ -882,12 +1042,59 @@ async function reload() {
   state.foods = foods;
   state.inbox = inbox;
   renderStats();
-  buildPlaceFilters();
-  buildFoodFilters();
-  renderPlaces();
-  renderFoods();
+  if (state.filtersBuilt && preserveUi) {
+    renderPlaces();
+    renderFoods();
+  } else {
+    buildPlaceFilters();
+    buildFoodFilters();
+    state.filtersBuilt = true;
+    renderPlaces();
+    renderFoods();
+  }
   renderInbox();
+  if (activeTab) activateTab(activeTab);
+  if (dialogOpen && dlg) dlg.showModal();
 }
+
+function schedulePoll(ms) {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = setTimeout(() => tickInboxPoll().catch(err => console.error(err)), ms);
+}
+
+async function tickInboxPoll() {
+  if (document.hidden) return;
+  let meta;
+  try {
+    meta = await api('/api/inbox?poll=1');
+  } catch (err) {
+    schedulePoll(5000);
+    return;
+  }
+  const fp = inboxFingerprint(meta);
+  const hadProcessing = recentProcessingItems().length > 0;
+  if (fp !== pollFingerprint) {
+    pollFingerprint = fp;
+    await reload({ preserveUi: true });
+  } else {
+    renderProcessingBanner();
+  }
+  const hasProcessing = (meta.processing_count || 0) > 0 || hadProcessing;
+  schedulePoll(hasProcessing ? 2000 : 5000);
+}
+
+document.getElementById('processing-banner').onclick = () => {
+  activateTab('inbox');
+};
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = null;
+    return;
+  }
+  tickInboxPoll().catch(err => console.error(err));
+});
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1030,5 +1237,7 @@ document.body.addEventListener('click', async (ev) => {
   }
 });
 
-reload().catch(err => console.error(err));
+reload().then(() => {
+  tickInboxPoll().catch(err => console.error(err));
+}).catch(err => console.error(err));
 `;

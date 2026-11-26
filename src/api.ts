@@ -5,6 +5,7 @@ import {
   getInbox,
   getPlace,
   listFoods,
+  getInboxPollMeta,
   listInbox,
   listPlaces,
   patchFood,
@@ -178,6 +179,10 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   }
 
   if (path === "/api/inbox" && request.method === "GET") {
+    if (url.searchParams.get("poll") === "1") {
+      const meta = await getInboxPollMeta(env.DB);
+      return json(meta);
+    }
     const inbox = await listInbox(env.DB);
     return json(inbox);
   }
@@ -188,6 +193,9 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     const row = await getInbox(env.DB, id);
     if (!row) {
       return json({ error: "not found" }, 404);
+    }
+    if (row.result_status === "processing") {
+      return json({ error: "still processing" }, 409);
     }
     const body = await readJson<{
       result_status?: string;

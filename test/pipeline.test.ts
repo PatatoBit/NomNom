@@ -11,6 +11,51 @@ afterEach(() => {
 });
 
 describe("webhook pipeline", () => {
+  it("persists processing before extraction finishes", async () => {
+    vi.stubGlobal("fetch", mockFetch);
+    const fullEnv = env as unknown as Env;
+    let resolveAi: ((value: { response: string }) => void) | undefined;
+    const aiDeferred = new Promise<{ response: string }>((resolve) => {
+      resolveAi = resolve;
+    });
+    fullEnv.AI = {
+      run: vi.fn().mockReturnValue(aiDeferred),
+    } as unknown as Ai;
+
+    const event = {
+      message_id: "mid-processing-1",
+      sender_id: "s-p",
+      sender_username: "patato.jpeg",
+      sent_at: new Date().toISOString(),
+      text: "save this spot",
+      reels: [{ url: "https://www.instagram.com/reel/PROC123/" }],
+      attachments: [],
+    };
+
+    const pipelinePromise = processNormalizedEvent(fullEnv, event);
+
+    await vi.waitFor(async () => {
+      const row = await fullEnv.DB.prepare(
+        `SELECT result_status FROM inbox_events WHERE message_id = ?`,
+      )
+        .bind(event.message_id)
+        .first<{ result_status: string }>();
+      expect(row?.result_status).toBe("processing");
+    });
+
+    resolveAi!({
+      response: JSON.stringify({ kind: "unclear" }),
+    });
+    await pipelinePromise;
+
+    const finalRow = await fullEnv.DB.prepare(
+      `SELECT result_status FROM inbox_events WHERE message_id = ?`,
+    )
+      .bind(event.message_id)
+      .first<{ result_status: string }>();
+    expect(finalRow?.result_status).toBe("needs_review");
+  });
+
   it("marks unclear messages as needs_review", async () => {
     vi.stubGlobal("fetch", mockFetch);
     const fullEnv = env as unknown as Env;

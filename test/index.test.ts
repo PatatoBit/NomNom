@@ -14,6 +14,9 @@ describe("MooYoung worker", () => {
     expect(html).toContain(".png?key=' + encodeURIComponent(CARTO_API_KEY)");
     expect(html).not.toContain("?api_key=");
     expect(response.headers.get("Content-Type")).toContain("text/html");
+    expect(html).toContain('id="processing-banner"');
+    expect(html).toContain("tickInboxPoll");
+    expect(html).toContain("PROCESSING_STALE_MS");
   });
 
   it("GET /webhook returns 403 without valid token in dev", async () => {

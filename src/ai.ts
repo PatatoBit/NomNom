@@ -23,6 +23,7 @@ export interface ExtractionResult {
   kind: ExtractionKind;
   place?: PlaceExtraction;
   food?: FoodExtraction;
+  pipeline_error?: string;
 }
 
 const EXTRACTION_PROMPT = `You extract restaurant and food information from Instagram DM text about food.

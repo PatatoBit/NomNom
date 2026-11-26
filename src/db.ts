@@ -8,7 +8,8 @@ export type InboxResultStatus =
   | "duplicate"
   | "needs_review"
   | "ignored"
-  | "error";
+  | "error"
+  | "processing";
 
 export interface PlaceRow {
   id: number;
@@ -116,7 +117,7 @@ export async function insertInboxIfNew(
       `INSERT INTO inbox_events (
         message_id, sender_id, sender_username, added_by, text,
         reels_json, attachments_json, result_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ignored')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'processing')`,
     )
     .bind(
       data.message_id,
@@ -252,6 +253,63 @@ export async function countInboxNeedsReview(db: D1Database): Promise<number> {
     )
     .first<{ c: number }>();
   return row?.c ?? 0;
+}
+
+export interface InboxProcessingRow {
+  id: number;
+  sender_username: string | null;
+  created_at: string;
+}
+
+export interface InboxPollMeta {
+  processing_count: number;
+  latest_inbox_id: number | null;
+  latest_created_at: string | null;
+  place_count: number;
+  food_count: number;
+  needs_review_count: number;
+  processing: InboxProcessingRow[];
+}
+
+export async function getInboxPollMeta(db: D1Database): Promise<InboxPollMeta> {
+  const summary = await db
+    .prepare(
+      `SELECT
+        (SELECT COUNT(*) FROM inbox_events WHERE result_status = 'processing') AS processing_count,
+        (SELECT MAX(id) FROM inbox_events) AS latest_inbox_id,
+        (SELECT created_at FROM inbox_events ORDER BY id DESC LIMIT 1) AS latest_created_at,
+        (SELECT COUNT(*) FROM places) AS place_count,
+        (SELECT COUNT(*) FROM foods) AS food_count,
+        (SELECT COUNT(*) FROM inbox_events WHERE result_status = 'needs_review') AS needs_review_count`,
+    )
+    .first<{
+      processing_count: number;
+      latest_inbox_id: number | null;
+      latest_created_at: string | null;
+      place_count: number;
+      food_count: number;
+      needs_review_count: number;
+    }>();
+
+  const { results } = await db
+    .prepare(
+      `SELECT id, sender_username, created_at
+       FROM inbox_events
+       WHERE result_status = 'processing'
+       ORDER BY id DESC
+       LIMIT 10`,
+    )
+    .all<InboxProcessingRow>();
+
+  return {
+    processing_count: summary?.processing_count ?? 0,
+    latest_inbox_id: summary?.latest_inbox_id ?? null,
+    latest_created_at: summary?.latest_created_at ?? null,
+    place_count: summary?.place_count ?? 0,
+    food_count: summary?.food_count ?? 0,
+    needs_review_count: summary?.needs_review_count ?? 0,
+    processing: results ?? [],
+  };
 }
 
 export async function getPlace(db: D1Database, id: number): Promise<PlaceRow | null> {
