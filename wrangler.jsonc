@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "nomnom-ig-bot",
+  "name": "mooyoung",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-06",
   "observability": {

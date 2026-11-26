@@ -8,6 +8,7 @@ INSTAGRAM_ACCESS_TOKEN=your_instagram_user_access_token
 # ALLOWED_USERNAMES=patato.jpeg,youthkid9048
 
 # Optional: forward normalized events to another service
-# FORWARD_WEBHOOK_URL=https://example.com/hooks/nomnom
+# INSTAGRAM_GRAPH_BASE_URL=https://graph.facebook.com/v27.0
+# FORWARD_WEBHOOK_URL=https://example.com/hooks/mooyoung
 # FORWARD_WEBHOOK_SECRET=shared_secret_for_receiver
 # FORWARD_WEBHOOK_HEADER=X-Webhook-Secret

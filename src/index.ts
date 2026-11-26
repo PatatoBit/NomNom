@@ -12,7 +12,7 @@ export default {
     const path = url.pathname;
 
     if (path === "/" && request.method === "GET") {
-      return Response.json({ ok: true, service: "nomnom-ig-bot" });
+      return Response.json({ ok: true, service: "mooyoung" });
     }
 
     if (path === "/webhook" && request.method === "GET") {
