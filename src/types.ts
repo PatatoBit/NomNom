@@ -1,3 +1,7 @@
+import type { InboxResultStatus } from "./db";
+
+export type { InboxResultStatus };
+
 export interface ReelAttachment {
   url: string;
   title?: string;

@@ -54,7 +54,7 @@ export async function processNormalizedEvent(
   const sourceUrl = reelUrls[0] ?? undefined;
 
   let resultStatus: InboxResultStatus = "needs_review";
-  let extraction: ExtractionResult;
+  let extraction: ExtractionResult = { kind: "unclear" };
 
   try {
     extraction = await runExtraction(env, {
@@ -95,23 +95,46 @@ export async function processNormalizedEvent(
       resultStatus = "duplicate";
     }
   } catch (err) {
-    extraction = { kind: "unclear" };
-    resultStatus = "error";
+    const errText = String(err);
+    extraction = { kind: "unclear", pipeline_error: errText };
+    resultStatus = "needs_review";
     console.error(
       JSON.stringify({
         level: "error",
         msg: "pipeline_error",
         message_id: event.message_id,
-        err: String(err),
+        err: errText,
       }),
     );
   }
 
   if (inbox.id != null) {
-    await updateInboxEvent(env.DB, inbox.id, {
-      extraction_json: JSON.stringify(extraction),
-      result_status: resultStatus,
-    });
+    try {
+      await updateInboxEvent(env.DB, inbox.id, {
+        extraction_json: JSON.stringify(extraction),
+        result_status: resultStatus,
+      });
+    } catch (updateErr) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "inbox_finalize_failed",
+          message_id: event.message_id,
+          err: String(updateErr),
+        }),
+      );
+      try {
+        await updateInboxEvent(env.DB, inbox.id, {
+          extraction_json: JSON.stringify({
+            kind: "unclear",
+            pipeline_error: String(updateErr),
+          }),
+          result_status: "error",
+        });
+      } catch {
+        // best effort; row may remain processing until manual fix
+      }
+    }
   }
 
   console.log(
