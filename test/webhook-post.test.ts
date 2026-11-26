@@ -131,11 +131,13 @@ describe("sender lookup and allowlist", () => {
   });
 
   it("processes allowlisted sender patato.jpeg", async () => {
-    mockFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ username: "Patato.JPEG" }), {
-        status: 200,
-      }),
-    );
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "Patato.JPEG" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
 
     const payload = {
       entry: [
@@ -171,11 +173,13 @@ describe("sender lookup and allowlist", () => {
 
 describe("forwarding", () => {
   it("standalone mode logs without forward fetch", async () => {
-    mockFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ username: "youthkid9048" }), {
-        status: 200,
-      }),
-    );
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "youthkid9048" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
 
     const env: Env = { ...baseEnv };
     delete env.FORWARD_WEBHOOK_URL;
@@ -183,9 +187,11 @@ describe("forwarding", () => {
     const payload = {
       entry: [
         {
+          id: "solo-bot-id",
           messaging: [
             {
               sender: { id: "s3" },
+              recipient: { id: "solo-bot-id" },
               message: { mid: "m3-" + Date.now(), text: "solo" },
             },
           ],
@@ -195,7 +201,7 @@ describe("forwarding", () => {
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await processWebhookPayload(env, payload);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     const forwardCalls = mockFetch.mock.calls.filter((c) =>
       String(c[0]).includes("hooks"),
     );
@@ -210,6 +216,7 @@ describe("forwarding", () => {
           status: 200,
         }),
       )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
     const env: Env = {
@@ -250,6 +257,7 @@ describe("forwarding", () => {
           status: 200,
         }),
       )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
     const env: Env = {
@@ -282,5 +290,227 @@ describe("forwarding", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["X-MooYoung-Secret"]).toBe("s");
     expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+describe("saved DM reply", () => {
+  it("sends saved reply after processing a new allowed DM", async () => {
+    const mid = "m-reply-new-" + Date.now();
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "patato.jpeg" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+
+    const payload = {
+      entry: [
+        {
+          id: "entry-page-id",
+          messaging: [
+            {
+              sender: { id: "sender-igsid-42" },
+              recipient: { id: "bot-recipient-99" },
+              timestamp: 1,
+              message: { mid, text: "save this place" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    const replyCall = mockFetch.mock.calls.find((c) =>
+      String(c[0]).endsWith("/bot-recipient-99/messages"),
+    );
+    expect(replyCall).toBeDefined();
+    const init = replyCall![1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer ig_token",
+    );
+    expect(JSON.parse(init.body as string)).toEqual({
+      recipient: { id: "sender-igsid-42" },
+      message: { text: "เซฟให้แล้วงับ" },
+      reply_to: { mid },
+    });
+    const sentLog = logSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === "string" &&
+        c[0].includes('"msg":"mooyoung_reply_sent"'),
+    );
+    expect(sentLog).toBeDefined();
+    logSpy.mockRestore();
+  });
+
+  it("uses entry.id when recipient.id is missing", async () => {
+    const mid = "m-entry-fallback-" + Date.now();
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "youthkid9048" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+
+    const payload = {
+      entry: [
+        {
+          id: "entry-only-bot-id",
+          messaging: [
+            {
+              sender: { id: "s-fallback" },
+              timestamp: 1,
+              message: { mid, text: "hello" },
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    const replyCall = mockFetch.mock.calls.find((c) =>
+      String(c[0]).endsWith("/entry-only-bot-id/messages"),
+    );
+    expect(replyCall).toBeDefined();
+  });
+
+  it("does not send reply on duplicate message_id", async () => {
+    const mid = "m-duplicate-reply-" + Date.now();
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "patato.jpeg" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "s-dup" },
+              recipient: { id: "bot-1" },
+              message: { mid, text: "once" },
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValue(new Response("{}", { status: 200 }));
+
+    await processWebhookPayload(baseEnv, payload);
+
+    const replyCalls = mockFetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/messages"),
+    );
+    expect(replyCalls).toHaveLength(0);
+  });
+
+  it("does not send reply for echo messages", async () => {
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "s-echo" },
+              recipient: { id: "bot-1" },
+              message: { mid: "echo-mid", text: "echo", is_echo: true },
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not send reply for non-allowlisted sender", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ username: "stranger" }), { status: 200 }),
+    );
+
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "s-stranger" },
+              recipient: { id: "bot-1" },
+              message: { mid: "m-stranger-" + Date.now(), text: "hi" },
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    const replyCalls = mockFetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/messages"),
+    );
+    expect(replyCalls).toHaveLength(0);
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it("does not fail webhook when reply API errors", async () => {
+    const mid = "m-reply-fail-" + Date.now();
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "patato.jpeg" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response("nope", { status: 502 }));
+
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "s-err" },
+              recipient: { id: "bot-1" },
+              message: { mid, text: "still save me" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(processWebhookPayload(baseEnv, payload)).resolves.toBeUndefined();
+
+    const failLog = errSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === "string" &&
+        c[0].includes('"msg":"mooyoung_reply_failed"'),
+    );
+    expect(failLog).toBeDefined();
+    const mooyoungEvent = logSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === "string" && c[0].includes('"type":"mooyoung_event"'),
+    );
+    expect(mooyoungEvent).toBeDefined();
+    logSpy.mockRestore();
+    errSpy.mockRestore();
   });
 });

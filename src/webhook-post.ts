@@ -2,7 +2,6 @@ import { verifyHubSignature256 } from "./crypto";
 import { parseAllowedUsernames, isUsernameAllowed, type Env } from "./env";
 import {
   buildNormalizedEvent,
-  collectMessagingEvents,
   isProcessableMessageEvent,
 } from "./extract";
 import { forwardEvent } from "./forward";
@@ -46,33 +45,35 @@ export async function processWebhookPayload(
   payload: WebhookPayload,
 ): Promise<void> {
   const allowed = parseAllowedUsernames(env.ALLOWED_USERNAMES);
-  const events = collectMessagingEvents(payload);
 
-  for (const event of events) {
-    if (!isProcessableMessageEvent(event)) {
-      continue;
-    }
-
-    let username = usernameCache.get(event.sender.id);
-    if (!username) {
-      const lookedUp = await lookupInstagramUsername(
-        event.sender.id,
-        env.INSTAGRAM_ACCESS_TOKEN,
-        env.INSTAGRAM_GRAPH_BASE_URL,
-      );
-      if (!lookedUp) {
+  for (const entry of payload.entry ?? []) {
+    for (const event of entry.messaging ?? []) {
+      if (!isProcessableMessageEvent(event)) {
         continue;
       }
-      username = lookedUp;
-      usernameCache.set(event.sender.id, username);
-    }
 
-    if (!isUsernameAllowed(username, allowed)) {
-      continue;
-    }
+      let username = usernameCache.get(event.sender.id);
+      if (!username) {
+        const lookedUp = await lookupInstagramUsername(
+          event.sender.id,
+          env.INSTAGRAM_ACCESS_TOKEN,
+          env.INSTAGRAM_GRAPH_BASE_URL,
+        );
+        if (!lookedUp) {
+          continue;
+        }
+        username = lookedUp;
+        usernameCache.set(event.sender.id, username);
+      }
 
-    const normalized = buildNormalizedEvent(event, username);
-    await processNormalizedEvent(env, normalized);
+      if (!isUsernameAllowed(username, allowed)) {
+        continue;
+      }
+
+      const normalized = buildNormalizedEvent(event, username);
+      const recipientIgId = event.recipient?.id ?? entry.id;
+      await processNormalizedEvent(env, normalized, { recipientIgId });
+    }
   }
 }
 

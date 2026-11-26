@@ -12,11 +12,17 @@ import type { AddedBy, InboxResultStatus } from "./db";
 import { bangkokDateYmd, type Env, usernameToAddedBy } from "./env";
 import { buildGoogleMapsSearchUrl, geocodePlaceName } from "./geocode";
 import { forwardEvent } from "./forward";
+import { sendMooyoungSavedReply } from "./instagram";
 import type { NormalizedMessageEvent } from "./types";
+
+export interface ProcessNormalizedEventContext {
+  recipientIgId?: string;
+}
 
 export async function processNormalizedEvent(
   env: Env,
   event: NormalizedMessageEvent,
+  ctx?: ProcessNormalizedEventContext,
 ): Promise<void> {
   const addedBy = usernameToAddedBy(event.sender_username);
   if (!addedBy) {
@@ -118,6 +124,16 @@ export async function processNormalizedEvent(
   );
 
   await forwardEvent(env, event);
+
+  if (ctx?.recipientIgId) {
+    await sendMooyoungSavedReply({
+      recipientIgId: ctx.recipientIgId,
+      senderIgsid: event.sender_id,
+      messageId: event.message_id,
+      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
+      graphBaseUrl: env.INSTAGRAM_GRAPH_BASE_URL,
+    });
+  }
 }
 
 async function persistPlace(
