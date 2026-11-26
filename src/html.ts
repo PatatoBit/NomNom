@@ -507,7 +507,7 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
       display: none;
       position: fixed;
       right: 20px;
-      bottom: 72px;
+      bottom: 76px;
       z-index: 41;
       width: min(280px, calc(100vw - 40px));
       background: #fff;
@@ -517,6 +517,7 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
       padding: 14px 16px;
       font-size: 14px;
       line-height: 22px;
+      pointer-events: auto;
     }
     .stats-popover.open { display: block; }
     .stats-popover .stat-line {
@@ -716,13 +717,17 @@ function renderMap(places) {
   if (!state.map) {
     state.map = L.map('map', { scrollWheelZoom: false, zoomControl: false }).setView([13.7563, 100.5018], 11);
     L.control.zoom({ position: 'topright' }).addTo(state.map);
-    const tileUrl = CARTO_API_KEY
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?api_key=' + encodeURIComponent(CARTO_API_KEY)
-      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-    L.tileLayer(tileUrl, {
-      attribution: '&copy; OSM &copy; CARTO',
-      maxZoom: 19
-    }).addTo(state.map);
+    if (CARTO_API_KEY) {
+      L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?api_key=' + encodeURIComponent(CARTO_API_KEY),
+        { attribution: '&copy; OSM &copy; CARTO', maxZoom: 19 }
+      ).addTo(state.map);
+    } else {
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(state.map);
+    }
   }
   state.markers.forEach(m => state.map.removeLayer(m));
   state.markers = [];
@@ -745,9 +750,7 @@ function placeRow(p) {
     ? '<span class="thumb"><img src="' + esc(p.image_url) + '" alt="" /></span>'
     : '<span class="thumb">' + esc(initials(p.name)) + '</span>';
   const meta = [p.area, p.city, p.cuisine, p.price_level].filter(Boolean).join(' · ');
-  const chip = done
-    ? (p.visit_date ? '<span class="chip done">' + esc(p.visit_date) + '</span>' : '')
-    : '<span class="chip">Want to go</span>';
+  const chip = done && p.visit_date ? '<span class="chip done">' + esc(p.visit_date) + '</span>' : '';
   const city = (!isBangkok(p.lat, p.lng) && p.city) ? ' <span class="city-badge">' + esc(p.city) + '</span>' : '';
   return '<li class="row" data-id="' + p.id + '">' +
     thumb +
@@ -804,11 +807,10 @@ function foodRow(f) {
     ? '<span class="thumb"><img src="' + esc(f.image_url) + '" alt="" /></span>'
     : '<span class="thumb">' + esc(initials(f.name)) + '</span>';
   const meta = [f.category, f.cuisine, f.restaurant_name ? 'At ' + f.restaurant_name : ''].filter(Boolean).join(' · ');
-  const chip = done ? '<span class="chip done">Tried</span>' : '<span class="chip">Want to try</span>';
   return '<li class="row">' +
     thumb +
     '<div class="row-main">' +
-      '<div class="row-title"><span class="name">' + esc(f.name) + '</span>' + chip + '</div>' +
+      '<div class="row-title"><span class="name">' + esc(f.name) + '</span></div>' +
       (meta ? '<div class="row-meta">' + esc(meta) + '</div>' : '') +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:4px">' +
