@@ -104,13 +104,21 @@ export async function insertInboxIfNew(
     reels_json: string;
     attachments_json: string;
   },
-): Promise<{ inserted: boolean; id: number | null }> {
+): Promise<{
+  inserted: boolean;
+  id: number | null;
+  result_status: InboxResultStatus | null;
+}> {
   const existing = await db
-    .prepare(`SELECT id FROM inbox_events WHERE message_id = ?`)
+    .prepare(`SELECT id, result_status FROM inbox_events WHERE message_id = ?`)
     .bind(data.message_id)
-    .first<{ id: number }>();
+    .first<{ id: number; result_status: InboxResultStatus }>();
   if (existing) {
-    return { inserted: false, id: existing.id };
+    return {
+      inserted: false,
+      id: existing.id,
+      result_status: existing.result_status,
+    };
   }
   const result = await db
     .prepare(
@@ -129,7 +137,11 @@ export async function insertInboxIfNew(
       data.attachments_json,
     )
     .run();
-  return { inserted: true, id: Number(result.meta.last_row_id) };
+  return {
+    inserted: true,
+    id: Number(result.meta.last_row_id),
+    result_status: "processing",
+  };
 }
 
 export async function updateInboxEvent(

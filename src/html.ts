@@ -991,6 +991,22 @@ function renderFoods() {
   document.getElementById('foods-tried').innerHTML = tried.length ? tried.map(foodRow).join('') : '<li class="empty">Nothing tried yet</li>';
 }
 
+function inboxReelTitle(row) {
+  try {
+    const reels = JSON.parse(row.reels_json || '[]');
+    const title = reels.find(r => r && r.title)?.title;
+    if (typeof title === 'string' && title.trim()) return title.trim();
+  } catch (e) {}
+  return '';
+}
+
+function inboxPreviewText(row) {
+  if (row.text && row.text.trim()) return row.text.trim();
+  const title = inboxReelTitle(row);
+  if (title) return title;
+  return '(no text)';
+}
+
 function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!state.inbox.length) {
@@ -998,27 +1014,32 @@ function renderInbox() {
     renderProcessingBanner();
     return;
   }
+  const statusRank = { processing: 3, needs_review: 2, error: 1 };
   const sorted = [...state.inbox].sort((a, b) => {
-    const ap = a.result_status === 'processing' ? 1 : 0;
-    const bp = b.result_status === 'processing' ? 1 : 0;
-    if (ap !== bp) return bp - ap;
+    const ar = statusRank[a.result_status] || 0;
+    const br = statusRank[b.result_status] || 0;
+    if (ar !== br) return br - ar;
     return (b.id || 0) - (a.id || 0);
   });
-  el.innerHTML = sorted.map(row => {
+  const actionable = sorted.filter(r => r.result_status === 'processing' || r.result_status === 'needs_review' || r.result_status === 'error');
+  const done = sorted.filter(r => !actionable.includes(r));
+  const rows = [...actionable, ...done];
+  el.innerHTML = rows.map(row => {
     let reels = [];
     try { reels = JSON.parse(row.reels_json || '[]'); } catch (e) {}
     const reelLinks = reels.map(r => r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noreferrer">Reel</a>' : '').join(' ');
     const processing = row.result_status === 'processing';
     const actions = processing
       ? '<span class="processing-badge"><span class="processing-dot"></span>Processing...</span>'
-      : row.result_status === 'needs_review'
-      ? '<button class="btn btn-primary btn-sm" data-action="promote-place" data-id="' + row.id + '">Add as place</button>' +
+      : row.result_status === 'needs_review' || row.result_status === 'error'
+      ? '<button class="btn btn-primary btn-sm" data-action="reprocess-inbox" data-id="' + row.id + '">Retry sort</button>' +
+        '<button class="btn btn-sm" data-action="promote-place" data-id="' + row.id + '">Add as place</button>' +
         '<button class="btn btn-sm" data-action="promote-food" data-id="' + row.id + '">Add as food</button>' +
         '<button class="btn btn-sm" data-action="dismiss-inbox" data-id="' + row.id + '">Dismiss</button>'
       : '<span class="row-meta">Status: ' + esc(row.result_status) + '</span>';
     return '<div class="inbox-item' + (processing ? ' is-processing' : '') + '">' +
       '<div class="row-meta">From @' + esc(row.sender_username) + ' · ' + esc(row.created_at) + '</div>' +
-      '<p>' + esc(row.text || '(no text)') + '</p>' +
+      '<p>' + esc(inboxPreviewText(row)) + '</p>' +
       (reelLinks ? '<div class="links">' + reelLinks + '</div>' : '') +
       '<div class="inbox-actions">' + actions + '</div></div>';
   }).join('');
@@ -1203,11 +1224,19 @@ document.body.addEventListener('click', async (ev) => {
       '<label>Notes<textarea name="notes">' + esc(f.notes || '') + '</textarea></label>',
       data => api('/api/foods/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
     );
+  } else if (action === 'reprocess-inbox') {
+    await api('/api/inbox/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reprocess: true })
+    });
+    await reload({ preserveUi: true });
   } else if (action === 'promote-place') {
     const row = state.inbox.find(x => x.id === id);
     let extraction = {};
     try { extraction = JSON.parse(row.extraction_json || '{}').place || {}; } catch (e) {}
-    const name = prompt('Place name', extraction.name || row.text?.slice(0, 80) || '');
+    const fallbackName = (inboxReelTitle(row) || row.text || '').split('\\n')[0].slice(0, 80);
+    const name = prompt('Place name', extraction.name || fallbackName || '');
     if (!name) return;
     await api('/api/inbox/' + id, {
       method: 'PATCH',
@@ -1219,7 +1248,8 @@ document.body.addEventListener('click', async (ev) => {
     const row = state.inbox.find(x => x.id === id);
     let extraction = {};
     try { extraction = JSON.parse(row.extraction_json || '{}').food || {}; } catch (e) {}
-    const name = prompt('Food name', extraction.name || row.text?.slice(0, 80) || '');
+    const fallbackName = (inboxReelTitle(row) || row.text || '').split('\\n')[0].slice(0, 80);
+    const name = prompt('Food name', extraction.name || fallbackName || '');
     if (!name) return;
     await api('/api/inbox/' + id, {
       method: 'PATCH',

@@ -26,7 +26,8 @@ export interface ExtractionResult {
   pipeline_error?: string;
 }
 
-const EXTRACTION_PROMPT = `You extract restaurant and food information from Instagram DM text about food.
+const EXTRACTION_PROMPT = `You extract restaurant and food information from Instagram DM / reel captions about food.
+Captions may be Thai, English, Japanese, Korean, or mixed, with emojis and hashtags.
 Reply with ONLY valid JSON, no markdown, matching this schema:
 {
   "kind": "place" | "food" | "both" | "unclear" | "non_food",
@@ -34,10 +35,15 @@ Reply with ONLY valid JSON, no markdown, matching this schema:
   "food": { "name", "category": "Dish to try" | "Recipe", "cuisine", "restaurant_name", "notes" } or null
 }
 Rules:
+- Prefer classifying food content over "unclear". This list is for restaurants and dishes.
+- Use a short clean name (first line of the caption, without hashtags/emojis when possible).
+- Dish / recipe / cooking / menu / street food / cafe food → kind "food".
+- Restaurant / cafe / buffet / named venue → kind "place".
+- category must be exactly "Dish to try" or "Recipe".
 - Never invent ratings, prices in numbers, or map URLs.
 - Leave unknown fields out or use null.
-- category must be exactly "Dish to try" or "Recipe".
-- If nothing clearly names a place or dish, use kind "unclear" or "non_food".
+- Only use "non_food" when clearly unrelated to eating out or cooking.
+- Use "unclear" only when there is truly no food or place signal at all.
 `;
 
 export function parseExtractionJson(raw: string): ExtractionResult | null {
@@ -70,6 +76,12 @@ function normalizeExtraction(result: ExtractionResult): void {
   if (!kinds.includes(result.kind)) {
     result.kind = "unclear";
   }
+  if (result.place?.name) {
+    result.place.name = cleanCandidateName(result.place.name) || result.place.name;
+  }
+  if (result.food?.name) {
+    result.food.name = cleanCandidateName(result.food.name) || result.food.name;
+  }
   if (result.food?.category) {
     const c = String(result.food.category);
     if (c !== "Dish to try" && c !== "Recipe") {
@@ -82,6 +94,44 @@ function normalizeExtraction(result: ExtractionResult): void {
   }
 }
 
+/** Shorten Instagram captions into a usable place/food name. */
+export function cleanCandidateName(raw: string): string | undefined {
+  let text = raw.replace(/\r/g, "").trim();
+  if (!text) {
+    return undefined;
+  }
+  text = text.split("\n").map((l) => l.trim()).find(Boolean) ?? text;
+  text = text
+    .replace(/#[^\s#]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Drop trailing emoji-heavy flourishes but keep CJK / Thai letters.
+  text = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+/gu, " ").replace(/\s+/g, " ").trim();
+  if (text.length > 80) {
+    text = text.slice(0, 80).trim();
+  }
+  return text.length > 1 ? text : undefined;
+}
+
+const PLACE_HINT_RE =
+  /(restaurant|ramen|tonkatsu|cafe|café|porridge|shabu|buffet|@central|dotonbori|cantina|izakaya|bistro|eatery|ร้าน|คาเฟ่|บุฟเฟ่ต์)/i;
+
+const RECIPE_HINT_RE =
+  /(recipe|cook at home|5-minute|instant noodle|easy dinner|easy recipe|เมนูง่าย|สูตร|ทำกิน|how to make|cooking)/i;
+
+const FOOD_HINT_RE =
+  /(food|dish|menu|noodle|pasta|ramen|sushi|tuna|beef|pork|chicken|dessert|street food|มาม่า|ต้มยำ|อร่อย|เมนู|อาหาร|กิน|ราเมน|ข้าว|หมี่|ก๋วยเตี๋ยว|#food|#recipe|#อร่อย|#เมนู)/i;
+
+function extractionHasOutcome(result: ExtractionResult): boolean {
+  if (result.kind === "place" || result.kind === "both") {
+    return Boolean(result.place?.name?.trim());
+  }
+  if (result.kind === "food") {
+    return Boolean(result.food?.name?.trim());
+  }
+  return false;
+}
+
 export function fallbackExtraction(input: {
   text?: string;
   reelTitles: string[];
@@ -90,42 +140,56 @@ export function fallbackExtraction(input: {
   const blob = [input.text ?? "", ...input.reelTitles, ...input.reelUrls]
     .filter(Boolean)
     .join("\n");
-  const lower = blob.toLowerCase();
   if (!blob.trim()) {
     return { kind: "unclear" };
   }
-  const restaurantHints =
-    /(restaurant|ramen|tonkatsu|cafe|porridge|shabu|buffet|@central|dotonbori)/i.test(
-      blob,
-    );
-  const recipeHints = /(recipe|cook at home|5-minute|instant noodle)/i.test(blob);
-  if (restaurantHints && !recipeHints) {
-    const name =
-      input.reelTitles[0]?.trim() ||
-      blob
-        .split("\n")[0]
-        ?.trim()
-        .slice(0, 120);
-    if (name && name.length > 2) {
-      return {
-        kind: "place",
-        place: { name, notes: input.text?.slice(0, 500) },
-      };
-    }
+
+  const candidate =
+    cleanCandidateName(input.reelTitles[0] ?? "") ||
+    cleanCandidateName(input.text ?? "") ||
+    cleanCandidateName(blob.split("\n")[0] ?? "");
+
+  const looksLikePrank = /textprank|prank|meme|outfit|travel vlog/i.test(blob);
+  const restaurantHints = PLACE_HINT_RE.test(blob);
+  const recipeHints = RECIPE_HINT_RE.test(blob);
+  const foodHints = FOOD_HINT_RE.test(blob) || recipeHints;
+
+  if (looksLikePrank && !recipeHints) {
+    return { kind: "unclear" };
   }
-  if (recipeHints || /dish to try/i.test(lower)) {
-    const name = input.reelTitles[0]?.trim() || input.text?.slice(0, 120).trim();
-    if (name) {
-      return {
-        kind: "food",
-        food: {
-          name,
-          category: recipeHints ? "Recipe" : "Dish to try",
-          notes: input.text,
-        },
-      };
-    }
+
+  if (restaurantHints && !recipeHints && candidate) {
+    return {
+      kind: "place",
+      place: { name: candidate, notes: input.text?.slice(0, 500) },
+    };
   }
+
+  if ((recipeHints || foodHints) && candidate) {
+    return {
+      kind: "food",
+      food: {
+        name: candidate,
+        category: recipeHints ? "Recipe" : "Dish to try",
+        notes: input.text,
+      },
+    };
+  }
+
+  // Nom Nom inbox is food-first: a substantive Instagram reel title
+  // (not a short DM like "lol") is worth saving as a dish to try.
+  const reelTitleName = cleanCandidateName(input.reelTitles[0] ?? "");
+  if (reelTitleName && reelTitleName.length >= 8 && !looksLikePrank) {
+    return {
+      kind: "food",
+      food: {
+        name: reelTitleName,
+        category: "Dish to try",
+        notes: input.text,
+      },
+    };
+  }
+
   return { kind: "unclear" };
 }
 
@@ -146,6 +210,8 @@ export async function runExtraction(
     input.reelUrls.length ? input.reelUrls.join("\n") : "(none)",
   ].join("\n");
 
+  let aiResult: ExtractionResult | null = null;
+
   try {
     const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
       messages: [
@@ -163,9 +229,9 @@ export async function runExtraction(
         ? String((response as { response?: string }).response ?? "")
         : JSON.stringify(response);
 
-    const parsed = parseExtractionJson(text);
-    if (parsed) {
-      return parsed;
+    aiResult = parseExtractionJson(text);
+    if (aiResult && extractionHasOutcome(aiResult)) {
+      return aiResult;
     }
   } catch (err) {
     console.error(
@@ -173,5 +239,10 @@ export async function runExtraction(
     );
   }
 
-  return fallbackExtraction(input);
+  const fallback = fallbackExtraction(input);
+  if (extractionHasOutcome(fallback)) {
+    return fallback;
+  }
+
+  return aiResult ?? fallback;
 }

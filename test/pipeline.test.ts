@@ -129,4 +129,64 @@ describe("webhook pipeline", () => {
       .first<{ c: number }>();
     expect(count?.c).toBe(1);
   });
+
+  it("retries extraction when a prior attempt left the row processing", async () => {
+    vi.stubGlobal("fetch", mockFetch.mockResolvedValue(new Response("[]")));
+    const fullEnv = env as unknown as Env;
+    fullEnv.AI = {
+      run: vi.fn().mockResolvedValue({
+        response: JSON.stringify({ kind: "unclear" }),
+      }),
+    } as unknown as Ai;
+
+    const event = {
+      message_id: "mid-retry-processing-1",
+      sender_id: "s-retry",
+      sender_username: "patato.jpeg",
+      sent_at: new Date().toISOString(),
+      text: undefined,
+      reels: [
+        {
+          url: "https://www.instagram.com/reel/RETRY123/",
+          title:
+            "มาม่าต้มยำหมูสับน้ำข้น แซ่บบบ🔥✨\n#อร่อย #เมนูง่ายๆ #มาม่าต้มยำหมูสับ",
+        },
+      ],
+      attachments: [],
+    };
+
+    await fullEnv.DB.prepare(
+      `INSERT INTO inbox_events (
+        message_id, sender_id, sender_username, added_by, text,
+        reels_json, attachments_json, result_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'processing')`,
+    )
+      .bind(
+        event.message_id,
+        event.sender_id,
+        event.sender_username,
+        "Pat",
+        null,
+        JSON.stringify(event.reels),
+        "[]",
+      )
+      .run();
+
+    await processNormalizedEvent(fullEnv, event);
+
+    const inbox = await fullEnv.DB.prepare(
+      `SELECT result_status, extraction_json FROM inbox_events WHERE message_id = ?`,
+    )
+      .bind(event.message_id)
+      .first<{ result_status: string; extraction_json: string }>();
+    expect(inbox?.result_status).toBe("added");
+    expect(inbox?.extraction_json).toContain("มาม่าต้มยำ");
+
+    const food = await fullEnv.DB.prepare(
+      `SELECT name FROM foods WHERE source_url = ?`,
+    )
+      .bind(event.reels[0].url)
+      .first<{ name: string }>();
+    expect(food?.name).toContain("มาม่าต้มยำ");
+  });
 });
