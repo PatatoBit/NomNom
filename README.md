@@ -39,6 +39,7 @@ Copy `.dev.vars.example` to `.dev.vars` for local development (do not commit `.d
 | `FORWARD_WEBHOOK_URL` | No | If set, POST normalized JSON events to this URL |
 | `FORWARD_WEBHOOK_SECRET` | No | Optional shared secret for the forward request |
 | `FORWARD_WEBHOOK_HEADER` | No | Header name for the secret; default is `Authorization: Bearer ...` |
+| `CARTO_API_KEY` | No | CARTO basemap API key for Leaflet tiles ([get one](https://carto.com/basemaps/apikey)) |
 
 Set production secrets with Wrangler:
 
@@ -46,6 +47,7 @@ Set production secrets with Wrangler:
 npx wrangler secret put WEBHOOK_VERIFY_TOKEN
 npx wrangler secret put INSTAGRAM_APP_SECRET
 npx wrangler secret put INSTAGRAM_ACCESS_TOKEN
+npx wrangler secret put CARTO_API_KEY
 ```
 
 ## Local development
