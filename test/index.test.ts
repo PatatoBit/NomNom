@@ -15,6 +15,8 @@ describe("MooYoung worker", () => {
     expect(html).not.toContain("?api_key=");
     expect(response.headers.get("Content-Type")).toContain("text/html");
     expect(html).toContain('id="processing-banner"');
+    expect(html).toContain('data-action="reprocess-inbox"');
+    expect(html).toContain("Retry sort");
     expect(html).toContain("tickInboxPoll");
     expect(html).toContain("PROCESSING_STALE_MS");
   });
