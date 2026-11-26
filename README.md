@@ -21,6 +21,7 @@ MooYoung is a TypeScript [Cloudflare Worker](https://developers.cloudflare.com/w
 | `GET` | `/` | Nom Nom List web app (HTML) |
 | `GET` | `/api/health` | Health check: `{ "ok": true, "service": "mooyoung" }` |
 | `GET/POST/PATCH/DELETE` | `/api/places`, `/api/foods` | CRUD for saved lists |
+| `GET` | `/api/thumbnail?url=` | Proxy Instagram reel/post `og:image` for card previews |
 | `GET/PATCH` | `/api/inbox` | Instagram DM inbox and review actions |
 | `GET` | `/webhook` | Meta subscription verification |
 | `POST` | `/webhook` | Instagram messaging webhooks |
