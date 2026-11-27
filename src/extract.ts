@@ -39,6 +39,13 @@ export function isProcessableMessageEvent(
   return true;
 }
 
+/** True when the normalized DM includes at least one reel URL to save. */
+export function hasReelToSave(event: NormalizedMessageEvent): boolean {
+  return event.reels.some(
+    (reel) => typeof reel.url === "string" && reel.url.trim().length > 0,
+  );
+}
+
 function extractFromAttachments(message: MessagingMessage): {
   reels: ReelAttachment[];
   attachments: GenericAttachment[];
