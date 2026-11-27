@@ -17,6 +17,8 @@ import type { NormalizedMessageEvent } from "./types";
 
 export interface ProcessNormalizedEventContext {
   recipientIgId?: string;
+  /** Re-run extraction even if this message_id was already finalized. */
+  forceReprocess?: boolean;
 }
 
 export async function processNormalizedEvent(
@@ -42,11 +44,103 @@ export async function processNormalizedEvent(
     attachments_json: attachmentsJson,
   });
 
-  if (!inbox.inserted) {
+  // Meta may retry while a row is still "processing". Continue extraction
+  // instead of permanently skipping the sort.
+  const shouldProcess =
+    inbox.inserted ||
+    inbox.result_status === "processing" ||
+    ctx?.forceReprocess === true;
+
+  if (!shouldProcess) {
     await forwardEvent(env, event);
     return;
   }
 
+  if (!inbox.inserted && inbox.id != null) {
+    await updateInboxEvent(env.DB, inbox.id, { result_status: "processing" });
+  }
+
+  await runInboxExtraction(env, event, addedBy, inbox.id);
+
+  await forwardEvent(env, event);
+
+  if (ctx?.recipientIgId && !ctx.forceReprocess) {
+    await sendMooyoungSavedReply({
+      recipientIgId: ctx.recipientIgId,
+      senderIgsid: event.sender_id,
+      messageId: event.message_id,
+      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
+      graphBaseUrl: env.INSTAGRAM_GRAPH_BASE_URL,
+    });
+  }
+}
+
+export async function reprocessInboxEvent(
+  env: Env,
+  inboxId: number,
+): Promise<InboxResultStatus | null> {
+  const row = await env.DB.prepare(`SELECT * FROM inbox_events WHERE id = ?`)
+    .bind(inboxId)
+    .first<{
+      id: number;
+      message_id: string;
+      sender_id: string | null;
+      sender_username: string | null;
+      added_by: AddedBy | null;
+      text: string | null;
+      reels_json: string | null;
+      attachments_json: string | null;
+      result_status: InboxResultStatus;
+    }>();
+
+  if (!row || !row.sender_username || !row.added_by) {
+    return null;
+  }
+  if (row.result_status === "processing") {
+    return "processing";
+  }
+
+  let reels: NormalizedMessageEvent["reels"] = [];
+  let attachments: NormalizedMessageEvent["attachments"] = [];
+  try {
+    reels = JSON.parse(row.reels_json || "[]") as NormalizedMessageEvent["reels"];
+  } catch {
+    reels = [];
+  }
+  try {
+    attachments = JSON.parse(
+      row.attachments_json || "[]",
+    ) as NormalizedMessageEvent["attachments"];
+  } catch {
+    attachments = [];
+  }
+
+  const event: NormalizedMessageEvent = {
+    message_id: row.message_id,
+    sender_id: row.sender_id ?? "",
+    sender_username: row.sender_username,
+    sent_at: new Date().toISOString(),
+    text: row.text ?? undefined,
+    reels,
+    attachments,
+  };
+
+  await updateInboxEvent(env.DB, row.id, { result_status: "processing" });
+  const { resultStatus } = await runInboxExtraction(
+    env,
+    event,
+    row.added_by,
+    row.id,
+  );
+  return resultStatus;
+}
+
+async function runInboxExtraction(
+  env: Env,
+  event: NormalizedMessageEvent,
+  addedBy: AddedBy,
+  inboxId: number | null,
+): Promise<{ resultStatus: InboxResultStatus; extraction: ExtractionResult }> {
   const reelTitles = event.reels
     .map((r) => r.title?.trim())
     .filter((t): t is string => Boolean(t));
@@ -54,7 +148,7 @@ export async function processNormalizedEvent(
   const sourceUrl = reelUrls[0] ?? undefined;
 
   let resultStatus: InboxResultStatus = "needs_review";
-  let extraction: ExtractionResult;
+  let extraction: ExtractionResult = { kind: "unclear" };
 
   try {
     extraction = await runExtraction(env, {
@@ -95,23 +189,46 @@ export async function processNormalizedEvent(
       resultStatus = "duplicate";
     }
   } catch (err) {
-    extraction = { kind: "unclear" };
-    resultStatus = "error";
+    const errText = String(err);
+    extraction = { kind: "unclear", pipeline_error: errText };
+    resultStatus = "needs_review";
     console.error(
       JSON.stringify({
         level: "error",
         msg: "pipeline_error",
         message_id: event.message_id,
-        err: String(err),
+        err: errText,
       }),
     );
   }
 
-  if (inbox.id != null) {
-    await updateInboxEvent(env.DB, inbox.id, {
-      extraction_json: JSON.stringify(extraction),
-      result_status: resultStatus,
-    });
+  if (inboxId != null) {
+    try {
+      await updateInboxEvent(env.DB, inboxId, {
+        extraction_json: JSON.stringify(extraction),
+        result_status: resultStatus,
+      });
+    } catch (updateErr) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "inbox_finalize_failed",
+          message_id: event.message_id,
+          err: String(updateErr),
+        }),
+      );
+      try {
+        await updateInboxEvent(env.DB, inboxId, {
+          extraction_json: JSON.stringify({
+            kind: "unclear",
+            pipeline_error: String(updateErr),
+          }),
+          result_status: "error",
+        });
+      } catch {
+        // best effort; row may remain processing until manual fix
+      }
+    }
   }
 
   console.log(
@@ -123,17 +240,7 @@ export async function processNormalizedEvent(
     }),
   );
 
-  await forwardEvent(env, event);
-
-  if (ctx?.recipientIgId) {
-    await sendMooyoungSavedReply({
-      recipientIgId: ctx.recipientIgId,
-      senderIgsid: event.sender_id,
-      messageId: event.message_id,
-      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
-      graphBaseUrl: env.INSTAGRAM_GRAPH_BASE_URL,
-    });
-  }
+  return { resultStatus, extraction };
 }
 
 async function persistPlace(

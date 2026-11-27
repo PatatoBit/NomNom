@@ -2,6 +2,7 @@ import { verifyHubSignature256 } from "./crypto";
 import { parseAllowedUsernames, isUsernameAllowed, type Env } from "./env";
 import {
   buildNormalizedEvent,
+  hasReelToSave,
   isProcessableMessageEvent,
 } from "./extract";
 import { forwardEvent } from "./forward";
@@ -71,6 +72,11 @@ export async function processWebhookPayload(
       }
 
       const normalized = buildNormalizedEvent(event, username);
+      // Only save and reply to reel DMs — ignore plain text / non-reel shares.
+      if (!hasReelToSave(normalized)) {
+        continue;
+      }
+
       const recipientIgId = event.recipient?.id ?? entry.id;
       await processNormalizedEvent(env, normalized, { recipientIgId });
     }

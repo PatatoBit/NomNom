@@ -5,6 +5,7 @@ import {
   getInbox,
   getPlace,
   listFoods,
+  getInboxPollMeta,
   listInbox,
   listPlaces,
   patchFood,
@@ -17,6 +18,7 @@ import {
 } from "./db";
 import type { Env } from "./env";
 import { bangkokDateYmd } from "./env";
+import { reprocessInboxEvent } from "./pipeline";
 import { fetchReelThumbnail } from "./thumbnail";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
@@ -182,6 +184,10 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   }
 
   if (path === "/api/inbox" && request.method === "GET") {
+    if (url.searchParams.get("poll") === "1") {
+      const meta = await getInboxPollMeta(env.DB);
+      return json(meta);
+    }
     const inbox = await listInbox(env.DB);
     return json(inbox);
   }
@@ -193,13 +199,29 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     if (!row) {
       return json({ error: "not found" }, 404);
     }
+    if (row.result_status === "processing") {
+      return json({ error: "still processing" }, 409);
+    }
     const body = await readJson<{
       result_status?: string;
+      reprocess?: boolean;
       promote_place?: Record<string, unknown>;
       promote_food?: Record<string, unknown>;
     }>(request);
     if (!body) {
       return badRequest("invalid json");
+    }
+
+    if (body.reprocess === true) {
+      const status = await reprocessInboxEvent(env, id);
+      if (status === null) {
+        return json({ error: "cannot reprocess" }, 400);
+      }
+      if (status === "processing") {
+        return json({ error: "still processing" }, 409);
+      }
+      const updated = await getInbox(env.DB, id);
+      return json(updated);
     }
 
     const inboxSourceUrl = sourceUrlFromInbox(row);

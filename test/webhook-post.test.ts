@@ -43,6 +43,13 @@ async function signBody(body: string, secret: string): Promise<string> {
 
 const mockFetch = vi.fn();
 
+function reelAttachment(url = "https://www.instagram.com/reel/TESTREEL1/") {
+  return {
+    type: "ig_reel",
+    payload: { url, title: "Test reel" },
+  };
+}
+
 beforeEach(() => {
   clearUsernameCacheForTests();
   vi.stubGlobal("fetch", mockFetch);
@@ -146,7 +153,10 @@ describe("sender lookup and allowlist", () => {
             {
               sender: { id: "sender-2" },
               timestamp: 1,
-              message: { mid: "m2-unique-" + Date.now(), text: "reel please" },
+              message: {
+                mid: "m2-unique-" + Date.now(),
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -167,6 +177,53 @@ describe("sender lookup and allowlist", () => {
     expect(mooyoungLogs).toHaveLength(1);
     const parsed = JSON.parse(mooyoungLogs[0][0] as string);
     expect(parsed.sender_username).toBe("Patato.JPEG");
+    logSpy.mockRestore();
+  });
+
+  it("ignores plain text DMs with no reel", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ username: "patato.jpeg" }), {
+        status: 200,
+      }),
+    );
+
+    const mid = "m-plain-" + Date.now();
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "sender-plain" },
+              recipient: { id: "bot-1" },
+              message: { mid, text: "just saying hi" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    const mooyoungLogs = logSpy.mock.calls.filter(
+      (c) =>
+        typeof c[0] === "string" &&
+        c[0].includes('"type":"mooyoung_event"'),
+    );
+    expect(mooyoungLogs).toHaveLength(0);
+
+    const replyCalls = mockFetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/messages"),
+    );
+    expect(replyCalls).toHaveLength(0);
+
+    const row = await baseEnv.DB.prepare(
+      `SELECT id FROM inbox_events WHERE message_id = ?`,
+    )
+      .bind(mid)
+      .first();
+    expect(row).toBeNull();
     logSpy.mockRestore();
   });
 });
@@ -192,7 +249,10 @@ describe("forwarding", () => {
             {
               sender: { id: "s3" },
               recipient: { id: "solo-bot-id" },
-              message: { mid: "m3-" + Date.now(), text: "solo" },
+              message: {
+                mid: "m3-" + Date.now(),
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -231,7 +291,10 @@ describe("forwarding", () => {
           messaging: [
             {
               sender: { id: "s4" },
-              message: { mid: "m4-" + Date.now(), text: "forward me" },
+              message: {
+                mid: "m4-" + Date.now(),
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -273,7 +336,10 @@ describe("forwarding", () => {
           messaging: [
             {
               sender: { id: "s5" },
-              message: { mid: "m5-" + Date.now(), text: "custom header" },
+              message: {
+                mid: "m5-" + Date.now(),
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -294,7 +360,7 @@ describe("forwarding", () => {
 });
 
 describe("saved DM reply", () => {
-  it("sends saved reply after processing a new allowed DM", async () => {
+  it("sends saved reply after processing a new allowed reel DM", async () => {
     const mid = "m-reply-new-" + Date.now();
     mockFetch
       .mockResolvedValueOnce(
@@ -313,7 +379,10 @@ describe("saved DM reply", () => {
               sender: { id: "sender-igsid-42" },
               recipient: { id: "bot-recipient-99" },
               timestamp: 1,
-              message: { mid, text: "save this place" },
+              message: {
+                mid,
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -345,6 +414,37 @@ describe("saved DM reply", () => {
     logSpy.mockRestore();
   });
 
+  it("does not send reply for plain text with no reel", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ username: "patato.jpeg" }), {
+        status: 200,
+      }),
+    );
+
+    const payload = {
+      entry: [
+        {
+          id: "bot-1",
+          messaging: [
+            {
+              sender: { id: "s-text" },
+              recipient: { id: "bot-1" },
+              message: { mid: "m-text-" + Date.now(), text: "save this place" },
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await processWebhookPayload(baseEnv, payload);
+
+    const replyCalls = mockFetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/messages"),
+    );
+    expect(replyCalls).toHaveLength(0);
+  });
+
   it("uses entry.id when recipient.id is missing", async () => {
     const mid = "m-entry-fallback-" + Date.now();
     mockFetch
@@ -363,7 +463,10 @@ describe("saved DM reply", () => {
             {
               sender: { id: "s-fallback" },
               timestamp: 1,
-              message: { mid, text: "hello" },
+              message: {
+                mid,
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -397,7 +500,10 @@ describe("saved DM reply", () => {
             {
               sender: { id: "s-dup" },
               recipient: { id: "bot-1" },
-              message: { mid, text: "once" },
+              message: {
+                mid,
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -452,7 +558,10 @@ describe("saved DM reply", () => {
             {
               sender: { id: "s-stranger" },
               recipient: { id: "bot-1" },
-              message: { mid: "m-stranger-" + Date.now(), text: "hi" },
+              message: {
+                mid: "m-stranger-" + Date.now(),
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
@@ -487,7 +596,10 @@ describe("saved DM reply", () => {
             {
               sender: { id: "s-err" },
               recipient: { id: "bot-1" },
-              message: { mid, text: "still save me" },
+              message: {
+                mid,
+                attachments: [reelAttachment()],
+              },
             },
           ],
         },
