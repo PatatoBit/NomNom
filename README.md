@@ -8,7 +8,7 @@ MooYoung is a TypeScript [Cloudflare Worker](https://developers.cloudflare.com/w
 - HMAC-SHA256 signature checks on `POST /webhook` (`X-Hub-Signature-256`)
 - Fast `200 OK` responses with background processing via `ctx.waitUntil`
 - Instagram Graph API username lookup for each sender (`graph.facebook.com/v27.0`)
-- Parsing for `ig_reel` attachments, other shares, and reel URLs in message text
+- Parsing for `ig_reel` attachments and reel URLs in message text (plain text / non-reel DMs are ignored; no save, no reply)
 - Structured JSON logs for `wrangler tail`
 - Optional forwarding of normalized events to a downstream URL
 - D1-backed Places, Foods, and DM Inbox with REST API under `/api/*`

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildNormalizedEvent,
   extractReelUrlsFromText,
+  hasReelToSave,
   isProcessableMessageEvent,
 } from "../src/extract";
-import type { MessagingEvent } from "../src/types";
+import type { MessagingEvent, NormalizedMessageEvent } from "../src/types";
 
 describe("isProcessableMessageEvent", () => {
   it("skips echo messages", () => {
@@ -118,5 +119,35 @@ describe("extractReelUrlsFromText", () => {
       "a https://instagram.com/reel/Ab1/ b https://www.instagram.com/reels/Cd2/",
     );
     expect(urls).toHaveLength(2);
+  });
+});
+
+describe("hasReelToSave", () => {
+  const base: NormalizedMessageEvent = {
+    message_id: "m1",
+    sender_id: "s1",
+    sender_username: "patato.jpeg",
+    sent_at: new Date().toISOString(),
+    reels: [],
+    attachments: [],
+  };
+
+  it("returns false for plain text with no reels", () => {
+    expect(hasReelToSave({ ...base, text: "hello", reels: [] })).toBe(false);
+  });
+
+  it("returns false for empty reel urls", () => {
+    expect(hasReelToSave({ ...base, reels: [{ url: "" }, { url: "  " }] })).toBe(
+      false,
+    );
+  });
+
+  it("returns true when a reel url is present", () => {
+    expect(
+      hasReelToSave({
+        ...base,
+        reels: [{ url: "https://www.instagram.com/reel/ABC123/" }],
+      }),
+    ).toBe(true);
   });
 });
