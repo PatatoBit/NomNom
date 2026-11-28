@@ -285,7 +285,10 @@ export function serveAppHtml(env: Pick<Env, "CARTO_API_KEY"> = {}): Response {
       height: 100%;
       object-fit: cover;
       display: block;
+      opacity: 0;
+      transition: opacity 0.15s ease;
     }
+    .thumb img.is-loaded { opacity: 1; }
     .row-main { min-width: 0; }
     .row-title {
       display: flex;
@@ -785,6 +788,41 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+function previewFallback(img) {
+  const label = img.getAttribute('data-label') || '';
+  const thumb = img.closest('.thumb');
+  if (thumb) {
+    thumb.textContent = initials(label);
+    return;
+  }
+  img.replaceWith(document.createTextNode(initials(label)));
+}
+
+function wireThumbImages(root) {
+  if (!root) return;
+  // load/error do not bubble; capture once per list so later src changes still fallback.
+  if (root.dataset.imgWired !== '1') {
+    root.dataset.imgWired = '1';
+    root.addEventListener('load', (ev) => {
+      const img = ev.target;
+      if (img && img.matches && img.matches('.thumb img')) {
+        img.classList.add('is-loaded');
+      }
+    }, true);
+    root.addEventListener('error', (ev) => {
+      const img = ev.target;
+      if (img && img.matches && img.matches('.thumb img')) {
+        previewFallback(img);
+      }
+    }, true);
+  }
+  root.querySelectorAll('.thumb img').forEach((img) => {
+    if (!img.complete) return;
+    if (img.naturalWidth > 0) img.classList.add('is-loaded');
+    else previewFallback(img);
+  });
+}
+
 async function api(path, opts) {
   const res = await fetch(path, opts);
   if (!res.ok) throw new Error(await res.text());
@@ -894,11 +932,12 @@ function isInstagramSource(url) {
 }
 
 function rowPreview(item, label) {
+  const labelAttr = ' data-label="' + esc(label || item.name || '') + '"';
   if (item.image_url) {
-    return '<span class="thumb"><img src="' + esc(item.image_url) + '" alt="" loading="lazy" /></span>';
+    return '<span class="thumb"><img src="' + esc(item.image_url) + '" alt="" loading="lazy"' + labelAttr + ' /></span>';
   }
   if (isInstagramSource(item.source_url)) {
-    return '<span class="thumb"><img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy" /></span>';
+    return '<span class="thumb"><img src="/api/thumbnail?url=' + encodeURIComponent(item.source_url) + '" alt="" loading="lazy"' + labelAttr + ' /></span>';
   }
   return '<span class="thumb">' + esc(initials(label || item.name)) + '</span>';
 }
@@ -932,9 +971,13 @@ function renderPlaces() {
   const placeholders = processingPlaceholders();
   document.getElementById('want-count').textContent = String(want.length);
   document.getElementById('visited-count').textContent = String(visited.length);
+  const wantEl = document.getElementById('places-want');
+  const visitedEl = document.getElementById('places-visited');
   const wantHtml = placeholders + (want.length ? want.map(placeRow).join('') : '');
-  document.getElementById('places-want').innerHTML = wantHtml || '<li class="empty">Keep places here without a visit yet</li>';
-  document.getElementById('places-visited').innerHTML = visited.length ? visited.map(placeRow).join('') : '<li class="empty">Nothing visited yet</li>';
+  wantEl.innerHTML = wantHtml || '<li class="empty">Keep places here without a visit yet</li>';
+  visitedEl.innerHTML = visited.length ? visited.map(placeRow).join('') : '<li class="empty">Nothing visited yet</li>';
+  wireThumbImages(wantEl);
+  wireThumbImages(visitedEl);
   renderMap(list);
   renderProcessingBanner();
 }
@@ -987,8 +1030,12 @@ function renderFoods() {
   const tried = list.filter(f => f.status === 'tried');
   document.getElementById('food-want-count').textContent = String(want.length);
   document.getElementById('food-tried-count').textContent = String(tried.length);
-  document.getElementById('foods-want').innerHTML = want.length ? want.map(foodRow).join('') : '<li class="empty">Keep dishes here without tasting yet</li>';
-  document.getElementById('foods-tried').innerHTML = tried.length ? tried.map(foodRow).join('') : '<li class="empty">Nothing tried yet</li>';
+  const wantEl = document.getElementById('foods-want');
+  const triedEl = document.getElementById('foods-tried');
+  wantEl.innerHTML = want.length ? want.map(foodRow).join('') : '<li class="empty">Keep dishes here without tasting yet</li>';
+  triedEl.innerHTML = tried.length ? tried.map(foodRow).join('') : '<li class="empty">Nothing tried yet</li>';
+  wireThumbImages(wantEl);
+  wireThumbImages(triedEl);
 }
 
 function inboxReelTitle(row) {

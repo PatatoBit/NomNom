@@ -27,11 +27,19 @@ export function extractMetaImageUrl(html: string): string | null {
     /content=["']([^"']+)["']\s+property=["']og:image["']/i,
     /name=["']twitter:image["']\s+content=["']([^"']+)["']/i,
     /content=["']([^"']+)["']\s+name=["']twitter:image["']/i,
+    // Instagram often embeds these in bootstrapped JSON when meta tags are stripped.
+    /"display_url"\s*:\s*"(https:\\\/\\\/[^"]+)"/i,
+    /"thumbnail_src"\s*:\s*"(https:\\\/\\\/[^"]+)"/i,
+    /"thumbnail_url"\s*:\s*"(https:\\\/\\\/[^"]+)"/i,
   ];
   for (const re of patterns) {
     const match = html.match(re);
     if (match?.[1]) {
-      return decodeHtmlEntities(match[1].trim());
+      const raw = match[1].trim();
+      const unescaped = raw.includes("\\/")
+        ? raw.replace(/\\u0026/g, "&").replace(/\\\//g, "/")
+        : raw;
+      return decodeHtmlEntities(unescaped);
     }
   }
   return null;
@@ -46,12 +54,61 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&gt;/g, ">");
 }
 
+function normalizeImageCandidate(raw: string): string | null {
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function resolveViaOEmbed(
+  permalink: string,
+  accessToken: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const endpoint = new URL("https://graph.facebook.com/v27.0/instagram_oembed");
+  endpoint.searchParams.set("url", permalink);
+  endpoint.searchParams.set("access_token", accessToken);
+  endpoint.searchParams.set("omitscript", "true");
+  try {
+    const response = await fetch(endpoint.toString(), { signal });
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as { thumbnail_url?: string };
+    if (typeof data.thumbnail_url === "string" && data.thumbnail_url) {
+      return normalizeImageCandidate(data.thumbnail_url);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export async function resolveInstagramThumbnailUrl(
   permalink: string,
-  signal?: AbortSignal,
+  options: { signal?: AbortSignal; accessToken?: string } = {},
 ): Promise<string | null> {
   if (!isInstagramPermalink(permalink)) {
     return null;
+  }
+
+  const { signal, accessToken } = options;
+
+  if (accessToken?.trim()) {
+    const fromOEmbed = await resolveViaOEmbed(
+      permalink,
+      accessToken.trim(),
+      signal,
+    );
+    if (fromOEmbed) {
+      return fromOEmbed;
+    }
   }
 
   const response = await fetch(permalink, {
@@ -71,20 +128,13 @@ export async function resolveInstagramThumbnailUrl(
   if (!imageUrl) {
     return null;
   }
-  try {
-    const parsed = new URL(imageUrl);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-    return parsed.toString();
-  } catch {
-    return null;
-  }
+  return normalizeImageCandidate(imageUrl);
 }
 
 export async function fetchReelThumbnail(
   permalink: string,
   requestUrl: string,
+  accessToken?: string,
 ): Promise<Response> {
   if (!isInstagramPermalink(permalink)) {
     return new Response("Invalid Instagram URL", { status: 400 });
@@ -103,7 +153,9 @@ export async function fetchReelThumbnail(
   }
 
   try {
-    const imageUrl = await resolveInstagramThumbnailUrl(permalink);
+    const imageUrl = await resolveInstagramThumbnailUrl(permalink, {
+      accessToken,
+    });
     if (!imageUrl) {
       return new Response("Thumbnail not found", { status: 404 });
     }
